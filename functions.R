@@ -11,7 +11,8 @@ require(multcomp)
 require(digest)
 require(xlsx)
 
-# data adjustment functions
+#### data loading and preprocessing #####
+# Read the data from a MarkerLynx/EZInfo output .txt file
 read.fun   <- function( file.path, meta.file, polarity) {
   
   #read raw data
@@ -56,6 +57,8 @@ read.fun   <- function( file.path, meta.file, polarity) {
   
   return(dat.long)
 }
+
+# Clean data 
 clean.fun  <- function( read.output, pars.file, polarity ) {
   
   # takes data from the read.fun() output
@@ -150,6 +153,8 @@ clean.fun  <- function( read.output, pars.file, polarity ) {
                 included = feat.included) )
   )
 }
+
+# Median fold change adjustment
 mfc.fun    <- function( clean.output ) {
   
   # takes data from the clean.fun() output
@@ -179,6 +184,8 @@ mfc.fun    <- function( clean.output ) {
   return(clean.output)
 
 }
+
+# Quality control correction
 qccorr.fun <- function( mfc.output, pars.file, polarity ) {
   
   # Takes output from mfc.fun()
@@ -258,5 +265,65 @@ qccorr.fun <- function( mfc.output, pars.file, polarity ) {
   mfc.output$data <- dat
   mfc.output$feature_data$qc_corr <- feat.qccorr
   return(mfc.output)
+  
+}
+
+#### merge, fill and standardize data ####  and log/standardize adjusted data ####
+# merge positive and negative data
+merge.fun <- function( dat.pos, dat.neg ) {
+  
+  dpos <- dat.pos$data
+  dneg <- dat.neg$data
+  
+  # add ion mode
+  dpos$mode <- "POS"
+  dneg$mode <- "NEG"
+  
+  # mereg pos and neg
+  dmerge <- rbind(dpos,dneg)
+  
+  # out
+  out <- list(data = dmerge , meta = list(pos = dat.pos$feature_data, neg = dat.neg$feature_data))
+  
+  return (out)
+  
+}
+
+# fill empty sample groups with minimal signals (25% percentile) values with a 15% random error
+fill.fun <- function( qccorr.output ) {
+  
+  dat <- qccorr.output$data
+  
+  qnt25       <- dat[ , quantile(.SD[ , min(Signal, na.rm = T), by = Feature ]$V1, probs = 0.25), ] # set minimum fill signal - 25% qunatile
+  incomp.grp  <- unique(dat[Filler == "x", Sample.Group])                                           # determine which sample groups contain filler-samples
+  fill.sample <- unique(dat[(Sample.Group %in% incomp.grp) & (is.na(Filler) ), Sample.ID])          # deteremine real samples in groups that contain filler-samples
+  dat[ n_sig == 0  | (Sample.ID %in% fill.sample & is.na(Signal_mfc_qc) ),  fill := T]              # set fill flag 
+  
+  
+  set.seed(19743009)
+  dat[fill == T , Signal_mfc_qc := runif(.N, 0.85, 1.15) * qnt25  ] # fill flagged samples with [qnt25] ± 15%
+  
+  qccorr.output$data <- dat
+  return(qccorr.output)
+  
+}
+
+# log transform and standardize signals for modeling
+log.scale.fun <- function( fill.out ) {
+  
+  dat <- fill.out$data
+  
+  # log trans all
+  dat[ !is.na(Signal_mfc_qc) , log_signal := log10(Signal_mfc_qc) ]
+  
+  # standardize 
+  dat[ Sample.Group != "QC" , log_signal_mean := mean(log_signal, na.rm = T), by = Feature ]
+  dat[ Sample.Group != "QC" , log_signal_sd   := sd(log_signal, na.rm = T)    , by = Feature]
+  dat[ Sample.Group != "QC" , log_signal_stand:= (log_signal - log_signal_mean)/log_signal_sd ]
+  
+  # out
+  out <- list(data = dat , meta = fill.out$meta)
+  
+  return(out)
   
 }
