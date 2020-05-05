@@ -283,7 +283,10 @@ merge.fun <- function( dat.pos, dat.neg ) {
   dmerge <- rbind(dpos,dneg)
   
   # out
-  out <- list(data = dmerge , meta = list(pos = dat.pos$feature_data, neg = dat.neg$feature_data))
+  out <- list(data = dmerge,
+              features = unique(dmerge$Feature),
+              meta = list(pos = dat.pos$feature_data, 
+                          neg = dat.neg$feature_data))
   
   return (out)
   
@@ -322,8 +325,121 @@ log.scale.fun <- function( fill.out ) {
   dat[ Sample.Group != "QC" , log_signal_stand:= (log_signal - log_signal_mean)/log_signal_sd ]
   
   # out
-  out <- list(data = dat , meta = fill.out$meta)
+  fill.out$data <- dat
+  return(fill.out)
+  
+}
+
+#### model and feature selection ###
+# model features with linear mixed effects model
+mod.fun <- function( stnd.out, pars.file ) { #fill.output
+  
+  # data
+  pars <-  read_xlsx(pars.file, col_names = T, sheet = "common" )
+  dat <- stnd.out$data
+  fts <- stnd.out$features
+  
+  # refactor
+  grp <- unique(sort(dat$Sample.Group))[c(10,1:9,11:17)]                      # set levels, M_C_03 is reference group
+  dat$Sample.Group <- factor(dat$Sample.Group, levels = grp)                  # relevel
+  dat[Sample.Group != "QC" , SxC := paste0(Subject.Species, "_", Challange) ] # make new groups Species x Challenge
+  
+  # models
+  n <- length(fts)
+  mods <- dat[Sample.Group != "QC", {
+    f <- unique(Feature)
+    cat(f," ", which(fts == f), " from ", n , "features  ") #counter
+    m <- list(lmer(log_signal_stand ~ Sample.Group + (1  | SxC : Animal), REML = T ) ) #model
+    cat("\n")
+    list(m)
+  }, by = Feature]
+  setnames(x = mods, old = "m", new = "lmer_mods")
+  
+  # get p vals
+  cat("\nCalculate P values.\n")
+  alpha_lmer <- pars$value[11]
+  mods[  , p_lmer := sapply(lmer_mods, function(m) Anova(m)["Pr(>Chisq)"] ), by = Feature ]
+  
+  # check if model is singular ( see ?isSingular() )
+  mods[  , singular := sapply(lmer_mods, function(m) isSingular(m) ), by = Feature ]
+  
+  # out
+  stnd.out$models <- mods
+  return(stnd.out)
+  
+}
+
+# Post-hoc analysis on relevant contrasts
+posthoc.fun <- function( mod.out, contrast.file ) { #mod.output
+  
+  mods <- mod.out$models
+  K    <- as.matrix(read.csv( contrast.file, header = TRUE, stringsAsFactors = FALSE, check.names = TRUE, row.names = 1) )
+  fts    <- mod.out$models[p_lmer < 5e-3, Feature] 
+  n    <- length(fts)
+  
+  mods.ph <- sapply( fts , function(f) {
+    cat(f," ", which(fts == f), " from ", n , "features\n") #counter
+    sapply(mods[Feature == f]$lmer_mods, function(m) {
+      summary(glht(m , linfct = K ) )
+      }, simplify = F )
+    }, simplify = F, USE.NAMES = T )
+  
+  #out
+  mod.out$posthoc <- mods.ph
+  return(mod.out)
+  
+}
+
+# Select features
+select.fun <- function( posthoc.out, pars.file, contrast.file  ) { #posthoc.output
+  
+  # load parameter data
+  pars <-  read_xlsx(pars.file, col_names = T, sheet = "common" )
+  
+  # set params
+  alpha_select <- 0.05 #pars$value[12]
+  mods <- posthoc.out$posthoc
+  f    <- posthoc.out$models[p_lmer < 5e-3, Feature] #features[1:3]  #
+  K    <- as.matrix(read.csv( contrast.file, header = TRUE, stringsAsFactors = FALSE, check.names = TRUE, row.names = 1) )
+  
+  # extract pvals from posthoc results
+  m_extr <- sapply(f, function(f) 
+    sapply(mods[[f]], function(m1) unlist(m1, recursive = F),
+           simplify = F, USE.NAMES = T) , simplify = F, USE.NAMES = T )
+  
+  p_vals      <- data.frame(sapply(f, function(f) m_extr[[f]][[1]]$test.pvalues ))
+  p_vals$grps <- rownames(K)
+  p_vals      <- data.table(gather(p_vals,key = Feature, value = pvals, 1:length(f)))
+  
+  # select C57 M vs I
+  p_vals[  , C57_MI :=  ifelse(sum(pvals[1] < alpha_select | pvals[2] < alpha_select) == 1 & sum(pvals[3:6] < alpha_select) >= 1, T,  F) , by = Feature]
+  f_C57 <- p_vals[C57_MI == T, unique(Feature)]
+  
+  # select DBA M vs I
+  p_vals[  , DBA_MI  :=  ifelse( sum( pvals[7:8] <  alpha_select) >= 1, T,  F) , by = Feature]
+  f_DBA <- p_vals[DBA_MI == T, unique(Feature)]
+  
+  # select DBA vs C57
+  p_vals[  , C57_DBA :=  ifelse( sum( pvals[9:11] < alpha_select) >= 2, T,  F) , by = Feature]
+  f_IS <- p_vals[C57_DBA == T, unique(Feature)]
+  
+  f_total <- unique(c(f_C57,f_DBA,f_IS))
+  
+  # out
+  out <- list( data = posthoc.out$data,
+               features = posthoc.out$features,
+               models = posthoc.out$models,
+               posthoc = posthoc.out$posthoc,
+               meta = posthoc.out$meta,
+               selections = list( pvals = p_vals,
+                                  select_C57 = f_C57,
+                                  select_DBA = f_DBA,
+                                  select_InterSpecies = f_IS,
+                                  select_total = f_total))
   
   return(out)
   
 }
+
+
+
