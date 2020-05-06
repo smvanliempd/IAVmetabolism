@@ -441,7 +441,7 @@ select.fun <- function( posthoc.out, pars.file, contrast.file  ) { #posthoc.outp
   
 }
 
-#### reintegrations merge and adjustment ####
+#### merge and adjust reintegrations  ####
 # bind manually reintegrated TargetLynx data to auto-itegrated data
 reint.bind.fun <- function( select.output, meta.file, reint.files ) {
   
@@ -517,12 +517,12 @@ reint.bind.fun <- function( select.output, meta.file, reint.files ) {
       d$QL_ID              <- ql.id
       
       d <- data.table(d)
-      setnames(d,"RT","RT_reint")
+      setnames(d,"RT","RT_reint_QL")
       dat.meta <- data.table(dat.meta)
       
       pol <- unique(d$Polarity)
       dat.meta <- dat.meta[Polarity == pol]
-      d_rt <- d[ , .(Feature, File.Name, RT_reint)]
+      d_rt <- d[ , .(Feature, File.Name, RT_reint_QL)]
       
       d <- dcast(d, File.Name + Sample.Text + Vial + QL_ID  ~ Feature, value.var = "Area")
       d <- merge(dat.meta, d, by = "File.Name", all.x = T, variable.factor = F)  #  # check!!! --> this should automatically delete excluded samples
@@ -550,8 +550,8 @@ reint.bind.fun <- function( select.output, meta.file, reint.files ) {
     f_dat     <- f_reint[!(f_reint %in% f_deleted)]             # get remaining features for melting dat later
     dat <- dat[Feature %in% f_dat] 
     
-    # calculate adjusted RT 
-    dat[ , RT_reint := weighted.mean(RT_reint,Area_reint, na.rm = T), by = Feature]
+    # calculate adjusted RT by taking the weighted average of RTs over samples of reintegrated features
+    dat[ , RT_reint := weighted.mean(RT_reint_QL,Area_reint, na.rm = T), by = Feature]
     
     # try to extract RTMZ values from Feature names otherwise assign NA
     mzrt <- str_extract_all(f_dat, "[0-9]{1,4}[.][0-9]{2,4}" )
@@ -752,5 +752,361 @@ reint.log.scale.fun <- function( reint.adjust.out ) {
   
 }
 
+#### model and feature selection of reintegrations ####
+# model and select reintegrated data
+reint.mod.fun <- function( stnd.out, pars.file, contrast.file ) {
+  
+  # data
+  K <- as.matrix(read.csv( contrast.file, header = TRUE, stringsAsFactors = FALSE, check.names = TRUE, row.names = 1) )
+  pars <-  read_xlsx(pars.file, col_names = T, sheet = "common" )
+  dat <- stnd.out$data
+  f_incl <- stnd.out$feature_data$reint_incl
+  n <- length(f_incl)
+  
+  # refactor
+  grp <- unique(sort(dat$Sample.Group))[c(10,1:9,11:17)]                      # set levels, M_C_03 is reference group
+  dat$Sample.Group <- factor(dat$Sample.Group, levels = grp)                  # relevel
+  dat[Sample.Group != "QC" , SxC := paste0(Subject.Species, "_", Challange) ] # make new groups Species x Challenge
+  
+  # models
+  cat("Make LME models./n/n")
+  mods <- dat[Feature %in% f_incl & Sample.Group != "QC", {
+    f <- unique(Feature)
+    cat("LME model for ",f," : ", which(f_incl == f), " from ", n , "features  ") #counter
+    m <- list(lmer(reint_log_stand ~ Sample.Group + (1  | SxC : Animal), REML = T ) )
+    cat("\n")
+    list(m)
+  }, by = Feature]
+  setnames(x = mods, old = "m", new = "lmer_mods")
+  
+  mods$V1
+  
+  # get p vals and select relevant models
+  alpha_lmer <- pars$value[11] 
+  mods[  , p_lmer := sapply(lmer_mods, function(m) Anova(m)["Pr(>Chisq)"] ), by = Feature ]
+  
+  # post hoc analysis
+  cat("\nPost-hoc analysis.\n\n")
+  mods.ph <- sapply( f_incl , function(f){
+    cat("Post-hoc test for ",f," : ", which(f_incl == f), " from ", n , "features\n") #counter
+    sapply(mods[Feature == f]$lmer_mods, function(m) {
+      summary(glht(m , linfct = K ) )
+    }, simplify = F )
+  }, simplify = F, USE.NAMES = T )
+  
+  # out
+  stnd.out$data <- dat
+  stnd.out$models <- mods
+  stnd.out$posthoc <- mods.ph
+  
+  return(stnd.out)
+  
+}
 
+# select reintegrated feautures
+reint.select.fun <- function( reint_ph.output, pars.file, contrast.file  ) {
+  
+  # load parameter data
+  pars <-  read_xlsx(pars.file, col_names = T, sheet = "common" )
+  alpha_select <- pars$value[14]
+  
+  # load data
+  mods <- reint_ph.output$posthoc
+  f    <- reint_ph.output$feature_data$reint_incl # select all included reintegrated features
+  K    <- as.matrix(read.csv( contrast.file, header = TRUE, stringsAsFactors = FALSE, check.names = TRUE, row.names = 1) )
+  
+  # extract pvals from posthoc results
+  m_extr <- sapply(f, function(f) 
+    sapply(mods[[f]], function(m) unlist(m, recursive = F), 
+           simplify = F, USE.NAMES = T) , simplify = F, USE.NAMES = T )
+  
+  
+  p_vals      <- data.table(sapply(f, function(f) m_extr[[f]][[1]]$test.pvalues ))
+  p_vals$grps <- rownames(K)
+  p_vals <- melt(p_vals,  measure.vars = f, variable.name = "Feature", value.name = "pvals", variable.factor = F )
+  
+  # select C57 M vs I
+  p_vals[  , C57_MI :=  ifelse( sum( pvals[1:6] <  alpha_select ) >= 1, T,  F) , by = Feature]
+  f_C57 <- p_vals[C57_MI == T, unique(Feature)]
+  
+  # select DBA M vs I
+  p_vals[  , DBA_MI  :=  ifelse( sum( pvals[7:8] <  alpha_select) >= 1, T,  F) , by = Feature]
+  f_DBA <- p_vals[DBA_MI == T, unique(Feature)]
+  
+  # select DBA vs C57
+  p_vals[  , C57_DBA :=  ifelse( sum( pvals[9:11] < alpha_select) >= 2, T,  F) , by = Feature]
+  f_IS <- p_vals[C57_DBA == T, unique(Feature)]
+  
+  feat_total <- unique(c(f_C57,f_DBA,f_IS))
+  
+  reint_ph.output$selections_reint <- list(pvals = p_vals,
+                                           select_C57 = f_C57,
+                                           select_DBA = f_DBA,
+                                           select_InterSpecies = f_IS,
+                                           select_total = feat_total)
+  
+  return(reint_ph.output)
+  
+}
+
+#### correlation analysis ####
+# Check "chemical" correlations i.e. check for adducts and fragments
+chem.cor.fun <- function( dat.merge.out ){
+  
+  # Function to check for adducts and fragments etc.
+  # Not perfect but close enough:
+  #  e.g. problems with features c("P0.66_226.1810","P0.66_296.1325", "P0.66_250.1991")
+  #  due to lockmass ineterference and low inetensities
+  
+  # cross check function
+  cross_check <- function( dat ) {
+    
+    # this function checks for features that are correlated via another feature
+    
+    # initalization
+    l  <- max(dat$chem_cor_grp_1)
+    g2 <- sapply(1:l , function(i)  dat[chem_cor_grp_1 == i, chem_cor_grp_2])
+    g1 <- sapply(g2  , function(g2) dat[chem_cor_grp_2 %in% g2, unique(chem_cor_grp_1)])
+    cc <- list(g2 = g2, g1 = g1 )
+    
+    # loop cross-checks until there are no more changes in correlation groups
+    # output (cc) are lists of correlated groups (chemically correlated)
+    cc.recursive <- function(dat, cc ) {
+      cc$g2p <- sapply(cc$g1  , function(g1) dat[chem_cor_grp_1 %in% g1, unique(chem_cor_grp_2)])
+      cc$g1p <- sapply(cc$g2  , function(g2) dat[chem_cor_grp_2 %in% g2, unique(chem_cor_grp_1)])
+      cc$g2  <- sapply(cc$g1p , function(g1) dat[chem_cor_grp_1 %in% g1, unique(chem_cor_grp_2)])
+      cc$g1  <- sapply(cc$g2p , function(g2) dat[chem_cor_grp_2 %in% g2, unique(chem_cor_grp_1)])
+      if (identical(cc$g1, cc$g1p) & identical(cc$g2, cc$g2p)) {
+        return(cc) 
+      } else {
+        cc.recursive(dat, cc) 
+      }
+    }
+    
+    # list correlated features
+    cc <- cc.recursive(dat, cc)
+    f_cor <- sapply(1:length(g1), function(i) dat[chem_cor_grp_1 %in% cc$g1[[i]] | chem_cor_grp_2 %in% cc$g2[[i]],
+                                                  sort(unique(c(Feature_1,Feature_2))) ] )
+    return(f_cor)
+    
+  }
+  
+  # prepare data 
+  f_reint <- dat.merge.out$feature_data$reint_incl
+  dat.cor <- dat.merge.out$data
+  
+  # Select reintegrated features and transform if logged
+  d_cor <- dat.cor[Feature %in%  f_reint & Sample.Group != "QC", .(Feature,RT_reint,mz_reint,Sample.ID, Sample.Group,Area_reint_mfc_qc) ]
+  setkey(d_cor, RT_reint)
+  
+  # make correlation matrix
+  d_cor <- dcast(d_cor, Sample.ID ~ Feature,value.var = "Area_reint_mfc_qc")
+  d_cor <- as.matrix(d_cor[,- 1])
+  d_cor <- cor(d_cor, use = "complete.obs")
+  d_cor <- data.table(Feature = colnames(d_cor), d_cor)
+  d_cor <- melt(d_cor, measure.vars  = d_cor$Feature)
+  setnames(d_cor, c("variable","value"), c("Feature_2","correlation"))
+  
+  # long format and bind with rtmz data
+  d_rt <- dat.cor[ ,unique(RT_reint), by = Feature]
+  d_cor <- merge(d_cor, d_rt, by = "Feature", variable.factor = F)
+  setnames(d_cor, c("V1"), c("RT_reint") )
+  d_cor <- merge(d_cor, d_rt, by.x = "Feature_2", by.y = "Feature", variable.factor = F)
+  setnames(d_cor, c("Feature_2","Feature","V1"), c("Feature_1","Feature_2","RT_reint_2") )
+  
+  
+  # determine RT differences between corelation pairs and select all chemically related features
+  dRT     <- 0.005 # maximum RT difference between correlation pairs for them to be regarded as chemically related
+  min_cor <- 0.8
+  
+  d_cor[ , delta_RT := abs(RT_reint - RT_reint_2)]
+  d_cor <- d_cor[ delta_RT < dRT & correlation > min_cor  ]  # you can tune these parameters
+  
+  # make groups by features --> this can go inside the cross_check() function
+  setkey(d_cor, "Feature_1")
+  d_cor[ , chem_cor_grp_1 := .GRP, by = Feature_1]
+  setkey(d_cor, "Feature_2")
+  d_cor[ , chem_cor_grp_2 := .GRP, by = Feature_2]
+  
+  # determine all correlated features
+  f_cor <- cross_check( d_cor )
+  d_cor[ , chem_cor_grp := NA]
+  for (i in 1: length(f_cor) ) d_cor[ , chem_cor_grp := ifelse(Feature_1 %in% f_cor[[i]] | Feature_2 %in% f_cor[[i]]  , i, chem_cor_grp) ]
+  d_cor[ !is.na(chem_cor_grp), chem_cor_grp := .GRP, by = chem_cor_grp]
+  
+  # annotate chem_cor features in total data
+  dat.cor[ , chem_cor_grp := NA]
+  for (i in 1: length(f_cor) ) dat.cor[ , chem_cor_grp := ifelse(Feature %in% f_cor[[i]], i, chem_cor_grp) ]
+  dat.cor[ !is.na(chem_cor_grp), chem_cor_grp := .GRP, by = chem_cor_grp]
+  
+  # Find represenative features for each chem_cor group (feature with highest median intensity)
+  dat.cor[ , med_int := median(reint_log_stand, na.rm = T), by = c("chem_cor_grp", "Feature")]
+  dat.cor[ , rep_feature := unique(Feature[which.max(med_int)])[1] , by = chem_cor_grp]
+  
+  # get representative features
+  f_rep  <- dat.cor[!is.na(rep_feature), unique(rep_feature) ]
+  
+  # get representative markers and bind with output
+  f_C57 <- dat.merge.out$selections_reint$feat$select_C57
+  f_DBA <- dat.merge.out$selections_reint$feat$select_DBA
+  f_int <- dat.merge.out$selections_reint$feat$select_InterSpecies
+  f_tot <- dat.merge.out$selections_reint$feat$select_total
+  
+  dat.merge.out$selections_reint$feat$select_C57_rep <- f_C57[f_C57 %in% f_rep]
+  dat.merge.out$selections_reint$feat$select_DBA_rep <- f_DBA[f_DBA %in% f_rep]
+  dat.merge.out$selections_reint$feat$select_InterSpecies_rep <- f_int[f_int %in% f_rep]
+  dat.merge.out$selections_reint$feat$select_total_rep <- f_tot[f_tot %in% f_rep]
+  
+  # annotate chem_cor features in correlation matrix
+  d_cor[ ,chem_cor_grp := NA ]
+  for (i in 1: length(f_cor) ) d_cor[ ,chem_cor_grp := ifelse(Feature_1 %in% f_cor[[i]], i, chem_cor_grp) ]
+  d_cor[ , chem_cor_grp := .GRP, by = chem_cor_grp]
+  
+  # return prep
+  dat.merge.out$data <- dat.cor
+  dat.merge.out$correlations$chemical <- d_cor
+  dat.merge.out$feature_data$included$representative_features <- f_rep
+  
+  return(dat.merge.out)
+  
+} 
+
+# Check if two features are correlated (also via a third feature)
+metb.cor.fun <- function( dat.corchem.out ) {
+  # metabolic correlations
+  
+  # cross check function
+  cross_check <- function( dat ) {
+    
+    # this function checks for features that are correlated via another feature
+    
+    # assign numbers to metabolic clusters
+    setkey(dat, "Feature_1")
+    dat[ , metb_cor_grp_1 := .GRP, by = Feature_1]
+    
+    setkey(dat, "Feature_2")
+    dat[ , metb_cor_grp_2 := .GRP, by = Feature_2]
+    
+    l  <- max(dat$metb_cor_grp_1)
+    g2  <- sapply(1:l , function(i)  dat[metb_cor_grp_1 == i, metb_cor_grp_2] ) # get corresponding group numbers from group 2
+    g1  <- sapply(g2  , function(g2) dat[metb_cor_grp_2 %in% g2, unique(metb_cor_grp_1)]) 
+    cc <- list(g2 = g2, g1 = g1 )
+    
+    # loop cross-checks until there are no more changes in correlation groups
+    # output (cc) are lists of correlated groups (chemically correlated)
+    cc.recursive <- function(dat, cc ) {
+      cc$g2p <- sapply(cc$g1  , function(g1) dat[metb_cor_grp_1 %in% g1, unique(metb_cor_grp_2)])
+      cc$g1p <- sapply(cc$g2  , function(g2) dat[metb_cor_grp_2 %in% g2, unique(metb_cor_grp_1)])
+      cc$g2  <- sapply(cc$g1p , function(g1) dat[metb_cor_grp_1 %in% g1, unique(metb_cor_grp_2)])
+      cc$g1  <- sapply(cc$g2p , function(g2) dat[metb_cor_grp_2 %in% g2, unique(metb_cor_grp_1)])
+      if (identical(cc$g1, cc$g1p) & identical(cc$g2, cc$g2p)) {
+        return(cc) 
+      } else { 
+        cc.recursive(dat, cc) 
+      }
+    } 
+    
+    # list correlated features
+    cc <- cc.recursive(dat, cc)
+    f_cor <- sapply(1:length(g1), function(i) dat[metb_cor_grp_1 %in% cc$g1[[i]] | metb_cor_grp_2 %in% cc$g2[[i]],
+                                                  sort(unique(c(Feature_1,Feature_2))) ] )
+    return(f_cor)
+    
+  } 
+  
+  # prepare data 
+  state <- c("baseline","infected")
+  species <- c("C57BL/6") #, "DBA/2"
+  dat.cor <- dat.corchem.out$data
+  dat.cor <- dat.cor[Feature == rep_feature ] #get only representative features of reintegrated data
+  dat.cor[ , State := ifelse( Challange == "mock" | Time.Day == 0, state[1] , state[2])  ]
+  
+  
+  dat.net <- sapply( species, function(sp){
+    sapply( state, function(st) {
+      
+      # Select reintegrated features and log transform
+      dat1 <- dat.cor[ State == st & Subject.Species == sp, .(Feature,Sample.ID,Area_reint_mfc_qc) ] #, log_trans_reint
+      dat1[ , Area_reint_mfc_qc := log10(Area_reint_mfc_qc)] #log_trans_reint == F
+      
+      # make correlation matrix
+      dat1 <- dcast(dat1, Sample.ID ~ Feature,value.var = "Area_reint_mfc_qc")
+      dat1 <- as.matrix(dat1[,- 1])
+      dat1 <- cor(dat1, use = "complete.obs", method = "pearson") #"spearman"
+      dat1[lower.tri(dat1)] <- NA
+      dat1 <- data.table(Feature = colnames(dat1), dat1)
+      dat1 <- melt(dat1, measure.vars  = dat1$Feature, variable.factor = F)
+      setnames(dat1, c("Feature","variable","value"), c("Feature_1","Feature_2","correlation_A"))
+      dat1 <- dat1[!is.na(correlation_A)]
+      
+      # return(dat1)
+      
+      # determine RT differences between corelation pairs 
+      cor_neg <- -0.90
+      cor_pos <-  0.90
+      dat1 <- dat1[  (correlation_A < cor_neg | correlation_A > cor_pos) & correlation_A != 1 ]  #delta_RT > 0.06 & 
+      
+      # determine all correlated features
+      f_cor <- cross_check( dat1 )
+      dat1[ , metb_cor_grp := NA]
+      for (i in 1: length(f_cor) ) dat1[ , metb_cor_grp := ifelse(Feature_1 %in% f_cor[[i]] | Feature_2 %in% f_cor[[i]]  , i, metb_cor_grp) ]
+      dat1[ !is.na(metb_cor_grp), metb_cor_grp := .GRP, by = metb_cor_grp]
+      
+      # check the same features in other state
+      dat2 <- dat.cor[State == ifelse(st == state[1], state[2], state[1]) & Subject.Species == sp, .(Feature,Sample.ID,Area_reint_mfc_qc) ] #, log_trans_reint
+      dat2[ , Area_reint_mfc_qc := log10(Area_reint_mfc_qc)] #log_trans_reint == F
+      
+      # make correlation matrix
+      dat2 <- dcast(dat2, Sample.ID ~ Feature,value.var = "Area_reint_mfc_qc")
+      dat2 <- as.matrix(dat2[,- 1])
+      dat2 <- cor(dat2, use = "complete.obs", method = "pearson" ) #"spearman"
+      dat2[lower.tri(dat2)] <- NA 
+      dat2 <- data.table(Feature = colnames(dat2), dat2)
+      dat2 <- melt(dat2, measure.vars  = dat2$Feature, variable.factor = F)
+      setnames(dat2, c("Feature","variable","value"), c("Feature_1","Feature_2","correlation_B"))
+      dat2 <- dat2[!is.na(correlation_B)]
+      
+      #merge 
+      dat2 <- merge(dat1,dat2,  by = c("Feature_1","Feature_2"), all.x = T) #[ ,.(Feature_1,Feature_2,correlation_B)]
+      dat2 <- dat2[ !(correlation_B < cor_neg | correlation_B > cor_pos), correlation_B := NA]  #, correlation_B := NA
+      
+      # make edges for network plot
+      setnames(dat2, c("Feature_1","Feature_2"), c("from","to"))
+      dat2[ , color := ifelse(correlation_A < 0, "red", "blue") ]
+      dat2[ , value := abs(correlation_A)]
+      
+      # make nodes for network plot
+      f_cor    <- dat2[ , unique(c(from,to) ) ]
+      f_remain <- dat2[!is.na(correlation_B) , unique(c(from,to) ) ] #also correlated in other state
+      nodes <- data.table(id = f_cor)
+      nodes[, title := id]
+      nodes[id %in% f_remain, color.background := "lightgreen"]
+      
+      # make node labels based on metabolic groups
+      labs1 <- dat2[ , .(from, metb_cor_grp)]
+      labs2 <- dat2[ , .(to, metb_cor_grp)]
+      
+      # return(list(labs1 = labs1, labs2 = labs2, dat2 = dat2))
+      
+      labs <- merge(labs1, labs2, by.x = c("from","metb_cor_grp"), by.y = c("to","metb_cor_grp"), all = T , allow.cartesian = T)
+      
+      # return(labs)
+      
+      labs[ , n := 1:.N, by = from]
+      labs <- labs[ n == 1]
+      labs[ ,n := NULL]
+      
+      nodes <- merge(nodes, labs, by.x = "id", by.y = "from")
+      nodes[ , label := paste0(id," (clstr_", metb_cor_grp,")")]
+      
+      list(edges = dat2, nodes = nodes)
+      
+    }, USE.NAMES = T, simplify = F )
+  }, USE.NAMES = T, simplify = F  )
+  
+  # return(dat.net)
+  
+  dat.corchem.out$correlations$metabolic <- dat.net
+  return(dat.corchem.out)
+}
 

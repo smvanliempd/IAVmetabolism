@@ -15,7 +15,7 @@ dat.neg <-  mfc.fun( clean.output = dat.neg )
 dat.neg <-  qccorr.fun( mfc.output  = dat.neg, pars.file = file.parm.all, polarity = "NEG" )
 
 # merge polarities, fill and logtrans/standardize
-dat.merge <- merge.fun(dat.pos = dat.pos, dat.neg = dat.neg); rm(dat.pos,dat.neg); gc()
+dat.merge <- merge.fun(dat.pos = dat.pos, dat.neg = dat.neg); rm(dat.pos,dat.neg) ; gc()
 dat.merge <- fill.fun( qccorr.output = dat.merge )
 dat.merge <- log.scale.fun(fill.out = dat.merge)
 
@@ -29,3 +29,14 @@ dat.reint <- reint.bind.fun(select.output = dat.mod, meta.file = file.meta.all, 
 dat.reint <- reint.clean.fun( reint.output = dat.reint, pars.file = file.parm.all)
 dat.reint <- reint.adjust.fun( reint.clean.output = dat.reint, pars.file = file.parm.all)
 dat.reint <- reint.log.scale.fun( reint.adjust.out = dat.reint)
+
+# modeling reintegrated data
+dat.mod.reint <- reint.mod.fun(stnd.out = dat.reint,pars.file = file.parm.all, contrast.file = file.contrast )   # ~ 15 minutes
+dat.mod.reint <- reint.select.fun( reint_ph.output = dat.mod.reint, pars.file = file.parm.all, contrast.file = file.contrast )
+
+# correlation analysis
+dat.corr <- chem.cor.fun(dat.merge.out = dat.mod.reint)
+dat.corr <- metb.cor.fun(dat.corchem.out = dat.corr)
+
+# Save the whole data thing to an .rds file
+saveRDS(dat.corr, file = paste0(getwd(),"/IVAmetabolism_data.rds"))
