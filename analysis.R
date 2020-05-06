@@ -1,4 +1,4 @@
-
+# cleaning, adjustment and modellinng of auto-integrated and manuallt integrated LCMS data
 source("functions.R")
 source("paths.R")
 
@@ -20,6 +20,12 @@ dat.merge <- fill.fun( qccorr.output = dat.merge )
 dat.merge <- log.scale.fun(fill.out = dat.merge)
 
 # model, post-hoc tests, feature selection
-dat.mod <- mod.fun( stnd.out = dat.merge, pars.file = file.parm.all )#; rm(dat.merge) ; gc()
-dat.mod <- posthoc.fun( mod.out = dat.mod, contrast.file = file.contrast ) # ~25 min 
+dat.mod <- mod.fun( stnd.out = dat.merge, pars.file = file.parm.all ); rm(dat.merge) ; gc()
+dat.mod <- posthoc.fun( mod.out = dat.mod, contrast.file = file.contrast )
 dat.mod <- select.fun( posthoc.out = dat.mod, pars.file = file.parm.all, contrast.file = file.contrast )
+
+# merge reintegrated data
+dat.reint <- reint.bind.fun(select.output = dat.mod, meta.file = file.meta.all, reint.files = file.reint)#; rm(dat.mod); gc()
+dat.reint <- reint.clean.fun( reint.output = dat.reint, pars.file = file.parm.all)
+dat.reint <- reint.adjust.fun( reint.clean.output = dat.reint, pars.file = file.parm.all)
+dat.reint <- reint.log.scale.fun( reint.adjust.out = dat.reint)

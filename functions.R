@@ -330,7 +330,7 @@ log.scale.fun <- function( fill.out ) {
   
 }
 
-#### model and feature selection ###
+#### model and feature selection ####
 # model features with linear mixed effects model
 mod.fun <- function( stnd.out, pars.file ) { #fill.output
   
@@ -411,11 +411,11 @@ select.fun <- function( posthoc.out, pars.file, contrast.file  ) { #posthoc.outp
   p_vals$grps <- rownames(K)
   p_vals      <- data.table(gather(p_vals,key = Feature, value = pvals, 1:length(f)))
   
-  # select C57 M vs I
+  # select C57 Mock vs Infected
   p_vals[  , C57_MI :=  ifelse(sum(pvals[1] < alpha_select | pvals[2] < alpha_select) == 1 & sum(pvals[3:6] < alpha_select) >= 1, T,  F) , by = Feature]
   f_C57 <- p_vals[C57_MI == T, unique(Feature)]
   
-  # select DBA M vs I
+  # select DBA Mock vs Infected
   p_vals[  , DBA_MI  :=  ifelse( sum( pvals[7:8] <  alpha_select) >= 1, T,  F) , by = Feature]
   f_DBA <- p_vals[DBA_MI == T, unique(Feature)]
   
@@ -438,6 +438,317 @@ select.fun <- function( posthoc.out, pars.file, contrast.file  ) { #posthoc.outp
                                   select_total = f_total))
   
   return(out)
+  
+}
+
+#### reintegrations merge and adjustment ####
+# bind manually reintegrated TargetLynx data to auto-itegrated data
+reint.bind.fun <- function( select.output, meta.file, reint.files ) {
+  
+  # functions
+  feature_extract <- function(d) {
+    f <- str_extract(d$V1,"[NPX]\\d{1,}\\.\\d{1,}\\_\\d{2,}\\.\\d{3,}.*")
+    d <- data.table(Feature = f, Polarity = unique(d$Polarity))
+    d <- d[!is.na(Feature)]
+    d[ , Feature := ifelse(Polarity == "POS", str_replace(Feature,"^X","P"),str_replace(Feature,"^X","N"))]
+    return(d$Feature)
+  }
+  
+  # read meta data, make propper col names, exclude samples
+  dat.meta <-  read_xlsx(meta.file)
+  col.names.meta <- make.names(colnames(dat.meta) )
+  colnames(dat.meta) <- col.names.meta
+  dat.meta <- subset(dat.meta, is.na(Exclude) )
+  dat.meta <- data.table(dat.meta)
+  col.names.meta <- colnames(dat.meta)
+  
+  # Read TargetLynx results.txt files
+  dat <- sapply(reint.files, function(file) {
+    d <- read.csv(file , sep = "\t", header = FALSE, stringsAsFactors = F) 
+    p <- ifelse(grepl("POS_REINT",file),"POS","NEG") # polarity set by file name!
+    d <- data.table(d, Polarity = p)
+  }, USE.NAMES = T,simplify = F)
+  
+  # extract metabolite names from all reintegrations and set polarity indicator (N/P)
+  f_all <- sapply(dat, function(d) feature_extract(d), USE.NAMES = F, simplify = T)
+  f_all <- do.call(unlist, list(f_all, use.names = F)) 
+  
+  # check if all selected raw features are present in reintegration data, if not --> reintegrate the ones that are missing
+  f_sel  <- select.output$selections$select_total
+  
+  if ( all(f_sel %in% f_all) ) {
+    
+    # read and wrangle TargetLynx data
+    dat <- sapply(dat, function(d) {
+      
+      # extract metabolite names from individual QL files and set propper polarity indicator (N/P)
+      f_ind <- feature_extract(d)
+      
+      # determine if .txt file was resaved in Excel (causes blank rows to be removed and changes row numbers)
+      # and determine sample numbers, column names and sample rows
+      resaved <- ifelse(d[2,1] == "", T, F)
+      if (resaved == T){
+        # #For "re-saved TargetLynx text files
+        ql.id     <- d$V1[3]
+        n.samples <- max(as.integer(d$V2[grep("[0-9]",d$V2)]))
+        c.names   <- make.names(as.character(d[7, -(1:2) ]))
+        r.select  <- as.vector(sapply(seq_along(f_ind), function(i) (8 + (i - 1) * (n.samples + 4) ) : (3 + i * (n.samples + 4)  ) ) )
+      } else {
+        #For untouched TargetLynx text files
+        ql.id     <- d$V1[2]
+        n.samples <- max(as.integer(d$V2[grep("[0-9]",d$V2)]))
+        c.names   <- make.names(as.character(d[4, -(1:2) ]))
+        r.select  <- as.vector(sapply(seq_along(f_ind), function(i) (5 + (i - 1) * (n.samples + 2) ) : (2 + i * (n.samples + 2)  ) ) )
+      }
+      
+      # adjsut colnames 
+      c.names <- ifelse(c.names %in%  c("POS","NEG"), "Polarity", c.names)
+      
+      # tidy up TargetLynx data
+      d <- d[r.select, -(1:2) ]
+      colnames(d)    <- c.names
+      colnames(d)[1] <- "File.Name"
+      d$Area               <- as.numeric(d$Area)
+      d$RT                 <- as.numeric(d$RT)
+      d$Peak.Start.Height  <- as.numeric(d$Peak.Start.Height)
+      d$Height             <- as.numeric(d$Height)
+      d$S.N                <- as.numeric(d$S.N)
+      d$Feature            <- as.vector(sapply(f_ind, function(m)  rep(m,n.samples) ) )
+      d$QL_ID              <- ql.id
+      
+      d <- data.table(d)
+      setnames(d,"RT","RT_reint")
+      dat.meta <- data.table(dat.meta)
+      
+      pol <- unique(d$Polarity)
+      dat.meta <- dat.meta[Polarity == pol]
+      d_rt <- d[ , .(Feature, File.Name, RT_reint)]
+      
+      d <- dcast(d, File.Name + Sample.Text + Vial + QL_ID  ~ Feature, value.var = "Area")
+      d <- merge(dat.meta, d, by = "File.Name", all.x = T, variable.factor = F)  #  # check!!! --> this should automatically delete excluded samples
+      d[ , QL_ID := unique(na.omit(QL_ID))] # to give filler samples correct QL_ID in order to remove duplicates later
+      d <- melt(d,measure.vars = f_ind)
+      setnames(d,c("variable", "value"),c("Feature", "Area_reint"))
+      
+      d <- merge(d, d_rt, by = c("File.Name", "Feature"), all.x = T, variable.factor = F)
+      
+      return(d)
+      
+    }, simplify = F )
+    dat <- do.call(rbind, dat)
+    
+    # delete superfluous features
+    dat[ , idx := as.integer(factor(QL_ID)), by = Feature] # check for duplicates
+    dat <- dat[idx == 1L,]                                 # delete duplicates
+    dat <- dat[!grepl("[*]",Feature)]                      # delete features tagged with an asterix
+    
+    # cross-check reintegrated features with cleaned features and delete if necesary
+    f_deleted <- do.call(unlist,list(select.output$meta$pos$deleted, 
+                                     select.output$meta$neg$deleted, 
+                                     use.names = F))            # features that were deleted from raw data
+    f_reint   <- unique(dat$Feature)                            # all reintegrated features
+    f_dat     <- f_reint[!(f_reint %in% f_deleted)]             # get remaining features for melting dat later
+    dat <- dat[Feature %in% f_dat] 
+    
+    # calculate adjusted RT 
+    dat[ , RT_reint := weighted.mean(RT_reint,Area_reint, na.rm = T), by = Feature]
+    
+    # try to extract RTMZ values from Feature names otherwise assign NA
+    mzrt <- str_extract_all(f_dat, "[0-9]{1,4}[.][0-9]{2,4}" )
+    mzrt <- data.table(t(sapply(mzrt, function(m) {
+      m <- as.double(m)
+      if (length(m) == 0 ) { m <- c(NA,NA) } else { m <- m }
+      return(m)
+    }, simplify = T, USE.NAMES = T )))
+    setnames(mzrt, c("V1", "V2"), c("RT_extr", "mz_reint" ) )
+    mzrt$Feature <- f_dat
+    dat <- merge(dat, mzrt, by = "Feature" , variable.factor = F)
+    
+    # set reintegrated flag
+    dat$reintegrated <- T
+    
+    # merge raw data with reintegrated data  
+    dat <- merge(select.output$data , dat, by = c( "Feature", col.names.meta), all = T , variable.factor = F)
+    dat <- dat[is.na(reintegrated), reintegrated := F]
+    
+    # prepare output
+    select.output$data <- dat
+    select.output$feature_data$reint_all <- f_dat
+    
+    return(select.output)
+    
+  } else {
+    
+    # print warnings and features missing from the reintegrations
+    print("Not all selected features are reintegrated. Reintegrate the following:")
+    print(f_sel[!(f_sel %in% f_all)])
+    
+    return(select.output)
+    
+  }
+}
+
+# Clean reintegrated data
+reint.clean.fun <- function( reint.output, pars.file ) {
+  
+  # read data
+  dat.clean <- reint.output$data
+  f_reint   <- reint.output$feature_data$reint_all
+  
+  for(plr in c("POS","NEG") ) {
+    
+    # read parameter file
+    pars <-  read_xlsx(pars.file, col_names = T, sheet = plr )
+    
+    # Delete features with less than 2 values in qcs
+    lim_qc <- pars$value[5]
+    dat.clean[reintegrated == T & Polarity == plr, Delete := ifelse( sum(!is.na(Area_reint[Sample.Group == "QC"]) ) <= lim_qc, T, F ) , by = Feature ]
+    feat.filter_qc <- unique(dat.clean[Delete == T & Polarity == plr, Feature])
+    dat.clean <- dat.clean[!(Feature %in% feat.filter_qc)]
+    
+    # Delete features where each individual sample group, except QCs amd I_D_05, contain less than 50% of data available
+    lim_n_sig <- pars$value[6]
+    dat.clean[ Filler == "x" & reintegrated == T & Polarity == plr, Area_reint := 0 ] # fill [Area_reint] of filler-samples with 0
+    dat.clean[!(Sample.Group == "QC") & reintegrated == T & Polarity == plr, n_sig := sum(!is.na(Area_reint) ), by = c("Feature", "Sample.Group") ]
+    dat.clean[ reintegrated == T & Polarity == plr, Delete :=  {
+      t <- n_sig > lim_n_sig
+      d <- ifelse(sum(t, na.rm = T) == 0, T, F )
+      list(d)
+    }, by = Feature ]
+    feat.filter_grp <- unique(dat.clean[Delete == T & Polarity == plr, Feature])
+    dat.clean <- dat.clean[!(Feature %in% feat.filter_grp)]
+    
+    # Delete features with more than "lim_na_glob" values missing over all sample groups except QCs/I_D_05
+    lim_na_glob <- pars$value[7]
+    dat.clean[ !(Sample.Group == "QC") & reintegrated == T & Polarity == plr, Delete := sum( is.na(Area_reint) ) >= lim_na_glob, by = Feature ]
+    feat.filter_na <- unique(dat.clean[Delete == T & Polarity == plr, Feature])
+    dat.clean <- dat.clean[!(Feature %in% feat.filter_na)]
+    
+    if (plr == "POS") {
+      reint.output$meta$pos$deleted$filter_qc_reint   <- feat.filter_qc
+      reint.output$meta$pos$deleted$filter_grp_reint <- feat.filter_grp
+      reint.output$meta$pos$deleted$filter_na_reint  <- feat.filter_na
+    } else {
+      reint.output$meta$neg$deleted$filter_qc_reint   <- feat.filter_qc
+      reint.output$meta$neg$deleted$filter_grp_reint <- feat.filter_grp
+      reint.output$meta$neg$deleted$filter_na_reint  <- feat.filter_na
+    }
+    
+  }
+  
+  # get remaining features
+  feat.included <-  unique(dat.clean[reintegrated == T ,Feature])
+  reint.output$feature_data$reint_incl <- feat.included
+  
+  # fill [Area_reint] of filler-samples with NA
+  dat.clean[ Filler == "x" , Area_reint := NA ]
+  
+  # out
+  reint.output$data <- dat.clean
+  return(reint.output)
+  
+}
+
+# MFC/QC adjust reintegrated data
+reint.adjust.fun <- function( reint.clean.output, pars.file) {
+  
+  # read data and vars
+  dat          <- reint.clean.output$data
+  f_reint      <- reint.clean.output$feature_data$reint_incl
+  
+  # mfc adjustments
+  dat[ ,mfc_factor := unique(na.omit(mfc_factor)), by = File.Name] # fill all samples with mfc values
+  dat[Feature %in% f_reint , Area_reint_mfc := Area_reint/mfc_factor]
+  
+  # QC adjustments
+  for(plr in c("POS","NEG") ) {
+    
+    # read parameter file
+    pars <-  read_xlsx(pars.file, col_names = T, sheet = plr )
+    lim_qccorr   <- pars$value[8]
+    alpha_qccorr <- pars$value[9]
+    pol.order    <- pars$value[13]
+    
+    # data quality check and scaling
+    dat[Sample.Group == "QC" & Feature %in% f_reint & Polarity == plr, qc_corr_reint  := sum(!is.na(Area_reint_mfc) ) >= lim_qccorr , by = Feature ] # determine if there are enough QC samples
+    dat[Sample.Group == "QC" & !is.na(Area_reint_mfc) & Feature %in% f_reint & Polarity == plr, qc_ref_Area_reint := Area_reint_mfc[1] , by = Feature ]    # determine first non-NA QC signal -> reference value
+    dat[qc_corr_reint == T  & Feature %in% f_reint & Polarity == plr, sig_scld_reint := Area_reint_mfc/qc_ref_Area_reint  , by = Feature ]              # make scaled QC signals based on reference value
+    dat[Feature %in% f_reint & Polarity == plr, c("qc_corr_fact_reint","qc_corr_flag_reint") := {     
+      
+      #data
+      d <- data.frame( inj = Injection.Number, sig = sig_scld_reint)
+      d <- d[complete.cases(d), ]
+      
+      if (nrow(d) >= lim_qccorr )  { # check if there are enough qc samples
+        
+        #model
+        o     <- 1:pol.order
+        fun   <- formula(paste0("sig ~ ",paste(paste0("I(inj^", o, ")" ), collapse  = "+") ) )
+        mod   <- summary(rlm(fun, data = d))
+        
+        # summary
+        tvals  <- mod$coefficients[,"t value"]
+        df     <- mod$df[2] 
+        pvals  <- dt(tvals, df)
+        
+        if (sum(pvals[2:(pol.order+1)] < alpha_qccorr) > 0 ) { # at least one of the pvals should be < alpha except for intercept
+          
+          c <- mod$coefficients[,"Value"]
+          qc_fact <- sapply( 1:(pol.order+1) , function(i) c[i] * Injection.Number^(i - 1), simplify = T  )
+          qc_fact <- rowSums(qc_fact)
+          qc_flag <- T
+          
+        } else {
+          qc_fact <- 1
+          qc_flag <- F
+          
+        }
+      } else {
+        qc_fact <- 1
+        qc_flag <- F
+      }
+      list(qc_fact, qc_flag )
+      
+    }, by = Feature ]
+    
+    # qc correction
+    dat[qc_corr_fact_reint < 0.1 & Polarity == plr, qc_corr_fact_reint := 0.1 ] # all corrections <10-fold set to 10-fold
+    dat[Polarity == plr, Area_reint_mfc_qc := ifelse(qc_corr_flag_reint == T, Area_reint_mfc/qc_corr_fact_reint, Area_reint_mfc)]
+    
+    # which reintegrated features were qc corrected?
+    feat.qccorr <- unique(dat[qc_corr_flag_reint == T & Polarity == plr, Feature ])
+    
+    if (plr == "POS") {
+      reint.clean.output$meta$pos$qc_corr_reint <- feat.qccorr 
+    } else {
+      reint.clean.output$meta$neg$qc_corr_reint <- feat.qccorr 
+    }
+    
+  }
+  
+  # prepare output data
+  reint.clean.output$data <- dat
+  return(reint.clean.output)
+  
+}
+
+# log transform and standardize reintegrated data
+reint.log.scale.fun <- function( reint.adjust.out ) {
+  
+  dat <- reint.adjust.out$data
+  
+  # log trans all
+  dat[ !is.na(Area_reint_mfc_qc) , reint_log := log10(Area_reint_mfc_qc) ]
+  
+  # standardize 
+  dat[ Sample.Group != "QC" , reint_log_mean := mean(reint_log, na.rm = T), by = Feature ]
+  dat[ Sample.Group != "QC" , reint_log_sd   := sd(reint_log, na.rm = T)    , by = Feature]
+  dat[ Sample.Group != "QC" , reint_log_stand:= (reint_log - reint_log_mean)/reint_log_sd ]
+  
+  # out
+  reint.adjust.out$data <- dat
+  
+  return(reint.adjust.out)
   
 }
 
