@@ -1,7 +1,7 @@
 # cleaning, adjustment and modellinng of auto-integrated and manually integrated LCMS data
-
-sapply(list.files(fun.loc), function(f) source(paste0(fun.loc,f)))
 source("paths.R")
+sapply(list.files(fun.loc), function(f) source(paste0(fun.loc,f)))
+
 
 # Read and clean raw data for positive ionization mode
 dat.pos <-  read.fun( file.path = file.raw.pos, meta.file = file.meta.all, polarity = "POS" )
