@@ -1,5 +1,6 @@
-# cleaning, adjustment and modellinng of auto-integrated and manuallt integrated LCMS data
-source("functions.R")
+# cleaning, adjustment and modellinng of auto-integrated and manually integrated LCMS data
+
+sapply(list.files(fun.loc), function(f) source(paste0(fun.loc,f)))
 source("paths.R")
 
 # Read and clean raw data for positive ionization mode

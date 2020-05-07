@@ -2,8 +2,7 @@
 .Rhistory
 .RData
 .Ruserdata
-data
+Ignore
+Data
 paths.R
-test.R
-marker_selection_NF_19.R
 IVAmetabolism_data.rds
