@@ -40,3 +40,9 @@ dat.corr <- metb.cor.fun(dat.corchem.out = dat.corr)
 
 # Save the whole data thing to an .rds file
 saveRDS(dat.corr, file = paste0(getwd(),"/IVAmetabolism_data.rds"))
+
+# export reintegrated feaure properties and identifications
+dat.export <- export.fun(dat.corr, "FEATURE_ID_v16_enriched_16.xlsx" )
+
+
+

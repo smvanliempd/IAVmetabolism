@@ -914,7 +914,6 @@ chem.cor.fun <- function( dat.merge.out ){
   d_cor <- merge(d_cor, d_rt, by.x = "Feature_2", by.y = "Feature", variable.factor = F)
   setnames(d_cor, c("Feature_2","Feature","V1"), c("Feature_1","Feature_2","RT_reint_2") )
   
-  
   # determine RT differences between corelation pairs and select all chemically related features
   dRT     <- 0.005 # maximum RT difference between correlation pairs for them to be regarded as chemically related
   min_cor <- 0.8
@@ -971,7 +970,7 @@ chem.cor.fun <- function( dat.merge.out ){
   
 } 
 
-# Check if two features are correlated (also via a third feature)
+# Check if two features are correlated (also via intermediate features)
 metb.cor.fun <- function( dat.corchem.out ) {
   # metabolic correlations
   
@@ -1016,7 +1015,7 @@ metb.cor.fun <- function( dat.corchem.out ) {
   
   # prepare data 
   state <- c("baseline","infected")
-  species <- c("C57BL/6") #, "DBA/2"
+  species <- c("C57BL/6") #, "DBA/2" omitted because not enough data points to get meaningfull correlations
   dat.cor <- dat.corchem.out$data
   dat.cor <- dat.cor[Feature == rep_feature ] #get only representative features of reintegrated data
   dat.cor[ , State := ifelse( Challange == "mock" | Time.Day == 0, state[1] , state[2])  ]
@@ -1104,9 +1103,53 @@ metb.cor.fun <- function( dat.corchem.out ) {
     }, USE.NAMES = T, simplify = F )
   }, USE.NAMES = T, simplify = F  )
   
-  # return(dat.net)
-  
+  # out
   dat.corchem.out$correlations$metabolic <- dat.net
   return(dat.corchem.out)
 }
+
+# bind reintegrated features with previously identifications and export the feature list to excel file
+export.fun <- function( metb.cor.out, id.file ) {
+  
+  # input data
+  dat    <- metb.cor.out$data
+  f_C57  <- metb.cor.out$selections_reint$select_C57
+  f_DBA  <- metb.cor.out$selections_reint$select_DBA
+  f_IS   <- metb.cor.out$selections_reint$select_InterSpecies
+  clstr  <- metb.cor.out$correlations$metabolic$`C57BL/6`$baseline$nodes[ , .(id, metb_cor_grp)]
+  
+  # Take ALL reintegrated features 
+  f_rep    <- dat[ reintegrated == T , .(rep_feature = rep_feature[1], 
+                                         RT = RT_reint[1], 
+                                         mz = mz_reint[1]) , by = Feature ]
+  f_rep[Feature %in% f_C57 , marker_C57 := T]
+  f_rep[Feature %in% f_DBA , marker_DBA := T]
+  f_rep[Feature %in% f_IS  , marker_IS  := T]
+  f_rep[  , marker := (marker_C57 | marker_DBA | marker_IS) ,by = Feature]
+  f_rep[Feature ==   rep_feature & marker == T, rep_marker := T ,by = Feature]
+  
+  # bind with metabolic cluster data
+  dat <- merge(f_rep, clstr, by.x = "Feature", by.y = "id", all = T)
+  
+  # extrapolate metabolic correlation groups from representative features to all associated features  
+  dat[ , metb_cor_grp_extrap := as.integer(mean(metb_cor_grp, na.rm = T)), by = rep_feature]
+  dat[is.nan(metb_cor_grp_extrap) , metb_cor_grp_extrap := NA]
+  col.del <- colnames(dat)[-1]
+  
+  # get id data
+  dat.id <- data.table(read_xlsx(paste0(dat.loc, "Results/",id.file), sheet = "ALL_FEATURES"))
+  dat.id[ , c(col.del) := NULL] # delete columns that are already present in dat
+  dat.id$new_feautures <- "no"  # mark which features are already present in previous id.file
+  dat.id <- merge(dat.id, dat, by = "Feature", all.y = T,sort = F)
+  dat.id[is.na(new_feautures), new_feautures := "yes"]
+  
+  # export new id data
+  write.xlsx(dat.id,paste0(dat.loc, "Results/R_export/FEATURE_ID.xlsx"),showNA = F,row.names = F)
+  
+  #out
+  return(dat)
+  
+}
+
+
 
