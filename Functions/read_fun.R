@@ -5,7 +5,7 @@ read.fun   <- function( file.path, meta.file, polarity) {
   dat.raw  <- read.csv(file.path, sep = "\t", stringsAsFactors = F)
   
   # read meta data
-  dat.meta <-  read_xlsx( meta.file)
+  dat.meta <-  read_xlsx( meta.file, sheet = "SAMPLES")
   colnames(dat.meta) <- make.names(colnames(dat.meta))
   dat.meta <- subset(dat.meta, Polarity == polarity & is.na(Exclude) )
   

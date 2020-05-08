@@ -46,7 +46,7 @@ metb.cor.fun <- function( dat.corchem.out ) {
   species <- c("C57BL/6") #, "DBA/2" omitted because not enough data points to get meaningfull correlations
   dat.cor <- dat.corchem.out$data
   dat.cor <- dat.cor[Feature == rep_feature ] #get only representative features of reintegrated data
-  dat.cor[ , State := ifelse( Challange == "mock" | Time.Day == 0, state[1] , state[2])  ]
+  dat.cor[ , State := ifelse( Challenge == "mock" | Time.Day == 0, state[1] , state[2])  ]
   
   
   dat.net <- sapply( species, function(sp){

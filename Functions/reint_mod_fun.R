@@ -11,7 +11,7 @@ reint.mod.fun <- function( stnd.out, pars.file, contrast.file ) {
   # refactor
   grp <- unique(sort(dat$Sample.Group))[c(10,1:9,11:17)]                      # set levels, M_C_03 is reference group
   dat$Sample.Group <- factor(dat$Sample.Group, levels = grp)                  # relevel
-  dat[Sample.Group != "QC" , SxC := paste0(Subject.Species, "_", Challange) ] # make new groups Species x Challenge
+  dat[Sample.Group != "QC" , SxC := paste0(Subject.Species, "_", Challenge) ] # make new groups Species x Challenge
   
   # models
   cat("Make LME models./n/n")

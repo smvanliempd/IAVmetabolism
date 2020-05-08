@@ -29,14 +29,17 @@ export.fun <- function( metb.cor.out, id.file ) {
   # get id data
   dat.id <- data.table(read_xlsx(paste0(dat.loc, "Results/",id.file), sheet = "ALL_FEATURES"))
   dat.id[ , c(col.del) := NULL] # delete columns that are already present in dat
-  dat.id$new_feautures <- "no"  # mark which features are already present in previous id.file
+  dat.id$new_feautures <- "no"  # set all features that are already present in previous id.file to "no"
   dat.id <- merge(dat.id, dat, by = "Feature", all.y = T,sort = F)
   dat.id[is.na(new_feautures), new_feautures := "yes"]
   
   # export new id data
-  write.xlsx(dat.id,paste0(dat.loc, "Results/R_export/FEATURE_ID.xlsx"),showNA = F,row.names = F)
+  write.xlsx(dat.id,paste0(dat.loc, "Results/R_export/FEATURE_ID.xlsx"),
+             showNA = F,
+             row.names = F,
+             sheetName = "ALL_FEATURES")
   
   #out
-  return(dat)
+  return(dat.id)
   
 }

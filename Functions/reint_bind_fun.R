@@ -11,7 +11,7 @@ reint.bind.fun <- function( select.output, meta.file, reint.files ) {
   }
   
   # read meta data, make propper col names, exclude samples
-  dat.meta <-  read_xlsx(meta.file)
+  dat.meta <-  read_xlsx(meta.file, sheet = "SAMPLES")
   col.names.meta <- make.names(colnames(dat.meta) )
   colnames(dat.meta) <- col.names.meta
   dat.meta <- subset(dat.meta, is.na(Exclude) )

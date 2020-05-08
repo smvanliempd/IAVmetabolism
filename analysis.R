@@ -31,7 +31,7 @@ dat.reint <- reint.adjust.fun( reint.clean.output = dat.reint, pars.file = file.
 dat.reint <- reint.log.scale.fun( reint.adjust.out = dat.reint)
 
 # modeling reintegrated data
-dat.mod.reint <- reint.mod.fun(stnd.out = dat.reint,pars.file = file.parm.all, contrast.file = file.contrast )   # ~ 15 minutes
+dat.mod.reint <- reint.mod.fun(stnd.out = dat.reint,pars.file = file.parm.all, contrast.file = file.contrast )
 dat.mod.reint <- reint.select.fun( reint_ph.output = dat.mod.reint, pars.file = file.parm.all, contrast.file = file.contrast )
 
 # correlation analysis
