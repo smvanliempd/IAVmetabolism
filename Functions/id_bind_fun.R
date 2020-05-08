@@ -1,5 +1,5 @@
 # bind results for reintegrated features with previously identifications and export the feature list to excel file.
-export.fun <- function( metb.cor.out, id.file ) {
+id.bind.fun <- function( metb.cor.out, id.file ) {
   
   # input data
   dat    <- metb.cor.out$data

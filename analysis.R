@@ -1,4 +1,5 @@
 # cleaning, adjustment and modellinng of auto-integrated and manually integrated LCMS data
+ptm <- proc.time()
 source("paths.R")
 source("load_functions.R")
 
@@ -42,7 +43,22 @@ dat.corr <- metb.cor.fun(dat.corchem.out = dat.corr)
 saveRDS(dat.corr, file = paste0(getwd(),"/IVAmetabolism_data.rds"))
 
 # export reintegrated feaure properties and identifications
-dat.export <- export.fun(dat.corr, "FEATURE_ID_v16_enriched_16.xlsx" )
+dat.id <- id.bind.fun(dat.corr, "FEATURE_ID_v16_enriched_16.xlsx" )
 
+# 32.5 minutes on i7-9700K/3.60GHz/32Gb RAM
+proc.time() - ptm
 
+# Bayesian multi-level models
+library(rstan)
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+dat.stan <- get.stan.data(dat.id, dat.corr)
 
+# prepare data for stan models
+dat.stan <- get.stan.data(id.data = dat.id,chem.cor.out = dat.corr)
+
+# compile model
+mod.samples <- stan_model( paste0(getwd(),"/Models/msg_20190904_001_cc.stan" ))
+
+# run models and extract samples
+dat.samples <- get.stan.samples(dat = dat.stan, mod = mod.samples)
