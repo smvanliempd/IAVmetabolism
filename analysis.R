@@ -36,19 +36,19 @@ dat.mod.reint <- reint.mod.fun(stnd.out = dat.reint,pars.file = file.parm.all, c
 dat.mod.reint <- reint.select.fun( reint_ph.output = dat.mod.reint, pars.file = file.parm.all, contrast.file = file.contrast )
 
 # correlation analysis
-dat.corr <- chem.cor.fun(dat.merge.out = dat.mod.reint)
-dat.corr <- metb.cor.fun(dat.corchem.out = dat.corr)
+dat.corr <- chem.cor.fun(dat.merge.out = dat.merge.out = dat.mod.reint)
+dat.corr <- metb.cor.fun(dat.corchem.out = dat.corchem.out = dat.corr)
 
 # Save the whole data thing to an .rds file
 saveRDS(dat.corr, file = paste0(getwd(),"/IVAmetabolism_data.rds"))
 
-# export reintegrated feaure properties and identifications
-dat.id <- id.bind.fun(dat.corr, "FEATURE_ID_v16_enriched_16.xlsx" )
+# bind and export reintegrated feature properties and identifications
+dat.id <- id.bind.fun(metb.cor.out = dat.corr, id.file = file.feature )
 
 # 32.5 minutes on i7-9700K/3.60GHz/32Gb RAM
 proc.time() - ptm
 
-# Bayesian multi-level models
+# Bayesian multi-level models pre feature
 library(rstan)
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
@@ -58,7 +58,11 @@ dat.stan <- get.stan.data(dat.id, dat.corr)
 dat.stan <- get.stan.data(id.data = dat.id,chem.cor.out = dat.corr)
 
 # compile model
-mod.samples <- stan_model( paste0(getwd(),"/Models/msg_20190904_001_cc.stan" ))
+mod.samples <- stan_model( file = paste0(getwd(),"/Models/msg_20190904_001_cc.stan" ))
 
 # run models and extract samples
 dat.samples <- get.stan.samples(dat = dat.stan, mod = mod.samples)
+
+# bind sample data to identifications
+dat.samples.id <- id.bind.samples.fun(samples.out = dat.samples,meta.file = file.meta.all,id.file = file.feature )
+

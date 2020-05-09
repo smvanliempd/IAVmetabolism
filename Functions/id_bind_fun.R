@@ -1,4 +1,4 @@
-# bind results for reintegrated features with previously identifications and export the feature list to excel file.
+# bind results for reintegrated features with previous identifications and export the feature-list to excel file.
 id.bind.fun <- function( metb.cor.out, id.file ) {
   
   # input data
@@ -27,7 +27,7 @@ id.bind.fun <- function( metb.cor.out, id.file ) {
   col.del <- colnames(dat)[-1]
   
   # get id data
-  dat.id <- data.table(read_xlsx(paste0(dat.loc, "Results/",id.file), sheet = "ALL_FEATURES"))
+  dat.id <- data.table(read_xlsx(id.file, sheet = "ALL_FEATURES"))
   dat.id[ , c(col.del) := NULL] # delete columns that are already present in dat
   dat.id$new_feautures <- "no"  # set all features that are already present in previous id.file to "no"
   dat.id <- merge(dat.id, dat, by = "Feature", all.y = T,sort = F)
@@ -42,4 +42,4 @@ id.bind.fun <- function( metb.cor.out, id.file ) {
   #out
   return(dat.id)
   
-}
+  }

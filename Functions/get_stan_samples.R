@@ -1,4 +1,4 @@
-get.stan.samples <- function(dat ,mod , n_chains = 4, get_delta_bl_samples = F) {
+get.stan.samples <- function(dat ,mod , meta.file, id.file, n_chains = 4, get_delta_bl_samples = F) {
   
   # function to transform log2 data in a %difference bounded by -100%
   log2delta <- function(d) {  100 * ( (2^d)  -  1 ) }
@@ -15,7 +15,7 @@ get.stan.samples <- function(dat ,mod , n_chains = 4, get_delta_bl_samples = F) 
   n_fts <- length(fts)
   
   # quantiles for samples
-  qtls <- c(5,25,50,75,95)/100
+  qtls <- c(0.05,0.25,0.50,0.75,0.95)
   
   # samples
   ss <- sapply(fts, function(f) {
@@ -72,16 +72,13 @@ get.stan.samples <- function(dat ,mod , n_chains = 4, get_delta_bl_samples = F) 
     
     # sample 6000 times from inter-strain differences for baselines (t0, d3m, d5m)
     set.seed(seedy)
-    s_pl_bl <- data.table(s_pl_bl = sample(x = s_bl, 
-                                           size = 6000,
-                                           replace = F))
+    s_pl_bl <- data.table(s_pl_bl = sample(x = s_bl, size = 6000, replace = F))
     s_pl_bl$Feature <- f
     
     # calculate del_del_cd_3i0i, i.e. the difference in percent-change between strains
     #  these are *no* log2 values!!!
     del_del_str_inf <-  c(log2delta(s[,"del_d_3i_0i"])) -  log2delta(c(s[,"del_c_3i_0i"]))
     s <- cbind(s, del_del_str_inf)
-    
     
     # calculate proportion of samples bigger than 0
     p <- data.table(t(apply(s,2, function(a) sum(a > 0 )/length(a))))
@@ -109,10 +106,12 @@ get.stan.samples <- function(dat ,mod , n_chains = 4, get_delta_bl_samples = F) 
     cat( " done in ",c(proc.time() - ptm)[3]," sec.\n")
     
     # return
-    return(list(d = d,s_pl_bl = s_pl_bl))
+    return(list(d = d,
+                s_pl_bl = s_pl_bl))
     
   }, USE.NAMES = T, simplify = F)
   
+  # extract and transform quantiles for deltas
   s_quantiles <- sapply(ss, function(l) l$d, simplify = F,USE.NAMES = T)
   s_quantiles <- do.call(rbind, s_quantiles)
   s_quantiles <- melt(s_quantiles, id.vars = c("Feature","metric"),variable.factor = F)
@@ -121,9 +120,12 @@ get.stan.samples <- function(dat ,mod , n_chains = 4, get_delta_bl_samples = F) 
   # just in case you want to get a density plot of the log2 delta baseline samples
   if(get_delta_bl_samples == T) {
     
+    # extract and transform pooled inter-strain baseline delta *samples* (lots of data)
     delta_bl_samples <- sapply(ss, function(l) l$s_pl_bl, simplify = F,USE.NAMES = T)
-    delta_bl_samples <- do.call(rbind, delta_bl_quantiles)
-    return(list(s_quantiles=s_quantiles,delta_bl_samples=delta_bl_samples))
+    delta_bl_samples <- do.call(rbind, delta_bl_samples)
+    
+    return(list(s_quantiles=s_quantiles,
+                delta_bl_samples=delta_bl_samples))
     
   } else {
     
