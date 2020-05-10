@@ -41,5 +41,10 @@ read.fun   <- function( file.path, meta.file, polarity) {
   setkey(dat.rtmz, Feature)
   dat.long <- dat.long[dat.rtmz]
   
-  return(dat.long)
+  # output
+  dat <- list(data = dat.long)
+  dat$feature_data$all_features <- feat.names
+
+  return(dat)
+  
 }

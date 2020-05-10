@@ -7,6 +7,8 @@ clean.fun  <- function( read.output, pars.file, polarity ) {
   # This function applies several data cleaning steps to the raw auto-integrated data. #
   ######################################################################################
   
+  dat <- read.output$data
+  
   # read parameter file with parameters for the different data cleaning steps
   pars <-  read_xlsx(pars.file, col_names = T, sheet = polarity )
   
@@ -25,8 +27,8 @@ clean.fun  <- function( read.output, pars.file, polarity ) {
   lim_sig  <- pars$value[4]
   
   # Denoise data
-  setkey(read.output, mz)
-  dat.noise <- read.output[ , .(RT     = unique(RT),
+  setkey(dat, mz)
+  dat.noise <- dat[ , .(RT     = unique(RT),
                                 mz     = unique(mz), 
                                 Signal = unique(max(Signal, na.rm = T))) , by = Feature ]
   dat.noise[                                            , delta_mz    := c(0,diff(mz))                              ] 
@@ -52,44 +54,56 @@ clean.fun  <- function( read.output, pars.file, polarity ) {
   
   
   # Delete noise features
-  read.output <- read.output[!(Feature %in% feat.filter_noise)]
+  dat <- dat[!(Feature %in% feat.filter_noise)]
   
   # Delete features with less than lim_qc (default = 2) values in qcs
   lim_qc <- pars$value[5]
-  read.output[Signal == 0, Signal := NA]
-  read.output[ , Delete := ifelse( sum(!is.na(Signal[Sample.Group == "QC"]) ) <= lim_qc, T, F ) , by = Feature ]
-  feat.filter_qc <- unique(read.output[Delete == T, Feature])
-  read.output <- read.output[!(Feature %in% feat.filter_qc)]
+  dat[Signal == 0, Signal := NA]
+  dat[ , Delete := ifelse( sum(!is.na(Signal[Sample.Group == "QC"]) ) <= lim_qc, T, F ) , by = Feature ]
+  feat.filter_qc <- unique(dat[Delete == T, Feature])
+  dat <- dat[!(Feature %in% feat.filter_qc)]
   
   # Delete features where each individual sample group, except QCs amd I_D_05, contain less than 50% of data available 
   lim_n_sig <- pars$value[6] 
-  read.output[ Filler == "x" , Signal := 0 ] # fill [Signal] of filler-samples with 0 
+  dat[ Filler == "x" , Signal := 0 ] # fill [Signal] of filler-samples with 0 
   
-  read.output[!(Sample.Group == "QC"), n_sig := sum(!is.na(Signal) ), by = c("Feature", "Sample.Group") ]
-  read.output[ , Delete :=  { 
+  dat[!(Sample.Group == "QC"), n_sig := sum(!is.na(Signal) ), by = c("Feature", "Sample.Group") ]
+  dat[ , Delete :=  { 
     t <- n_sig > lim_n_sig
     d <- ifelse(sum(t, na.rm = T) == 0, T, F )
     list(d)
   }, by = Feature ]
-  feat.filter_grp<- unique(read.output[Delete == T, Feature])
-  read.output <- read.output[!(Feature %in% feat.filter_grp)]
+  feat.filter_grp<- unique(dat[Delete == T, Feature])
+  dat <- dat[!(Feature %in% feat.filter_grp)]
   
   # Delete features with more than "lim_na_glob" values missing over all sample groups except QCs/I_D_05
   lim_na_glob <- pars$value[7]
-  read.output[ !(Sample.Group == "QC") , Delete := sum( is.na(Signal) ) >= lim_na_glob, by = Feature ]
-  feat.filter_na <- unique(read.output[Delete == T, Feature])
-  read.output <- read.output[!(Feature %in% feat.filter_na)]
-  feat.included <-  unique(read.output$Feature)
+  dat[ !(Sample.Group == "QC") , Delete := sum( is.na(Signal) ) >= lim_na_glob, by = Feature ]
+  feat.filter_na <- unique(dat[Delete == T, Feature])
+  dat <- dat[!(Feature %in% feat.filter_na)]
+  feat.included <-  unique(dat$Feature)
   
-  read.output[ Filler == "x" , Signal := NA ] # fill [Signal] of filler-samples with NA 
+  dat[ Filler == "x" , Signal := NA ] # fill [Signal] of filler-samples with NA 
   
-  return(list(data= read.output, 
-              feature_data = list(
-                deleted  = list(plot_noise   = plot,
-                                noise_filter = feat.filter_noise,
-                                filter_qc    = feat.filter_qc,
-                                filter_grp   = feat.filter_grp,
-                                filter_na    = feat.filter_na),
-                included = feat.included) )
-  )
+  # out
+  read.output$data <- dat
+  read.output$feature_data$included <- feat.included
+  read.output$feature_data$deleted  <- list(plot_noise   = plot,
+                                           noise_filter = feat.filter_noise,
+                                           filter_qc    = feat.filter_qc,
+                                           filter_grp   = feat.filter_grp,
+                                           filter_na    = feat.filter_na)
+  
+  return(read.output)
+  
+  
+  # return(list(data= read.output, 
+  #             feature_data = list(
+  #               deleted  = list(plot_noise   = plot,
+  #                               noise_filter = feat.filter_noise,
+  #                               filter_qc    = feat.filter_qc,
+  #                               filter_grp   = feat.filter_grp,
+  #                               filter_na    = feat.filter_na),
+  #               included = feat.included) )
+  # )
 }
