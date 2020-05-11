@@ -5,6 +5,7 @@ reint.clean.fun <- function( reint.output, pars.file ) {
   dat.clean <- reint.output$data
   f_reint   <- reint.output$feature_data$reint_all
   
+  # clean positive and negative reintegrations seperately
   for(plr in c("POS","NEG") ) {
     
     # read parameter file
@@ -34,12 +35,13 @@ reint.clean.fun <- function( reint.output, pars.file ) {
     feat.filter_na <- unique(dat.clean[Delete == T & Polarity == plr, Feature])
     dat.clean <- dat.clean[!(Feature %in% feat.filter_na)]
     
+    # Collect deleted features
     if (plr == "POS") {
-      reint.output$meta$pos$deleted$filter_qc_reint   <- feat.filter_qc
+      reint.output$meta$pos$deleted$filter_qc_reint  <- feat.filter_qc
       reint.output$meta$pos$deleted$filter_grp_reint <- feat.filter_grp
       reint.output$meta$pos$deleted$filter_na_reint  <- feat.filter_na
     } else {
-      reint.output$meta$neg$deleted$filter_qc_reint   <- feat.filter_qc
+      reint.output$meta$neg$deleted$filter_qc_reint  <- feat.filter_qc
       reint.output$meta$neg$deleted$filter_grp_reint <- feat.filter_grp
       reint.output$meta$neg$deleted$filter_na_reint  <- feat.filter_na
     }

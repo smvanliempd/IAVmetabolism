@@ -1,11 +1,17 @@
 # Post-hoc analysis on relevant contrasts
-posthoc.fun <- function( mod.out, contrast.file ) { #mod.output
+posthoc.fun <- function( mod.out, pars.file, contrast.file ) {
   
+  # load data
+  pars <- read_xlsx(pars.file, col_names = T, sheet = "COMMON" )
   mods <- mod.out$models
   K    <- as.matrix(read.csv( contrast.file, header = TRUE, stringsAsFactors = FALSE, check.names = TRUE, row.names = 1) )
-  fts    <- mod.out$models[p_lmer < 5e-3, Feature] 
+  
+  # select lmer mods for posthoc tests based on alpha_lmer
+  alpha_lmer <- pars$value[11]
+  fts    <- mod.out$models[p_lmer < alpha_lmer, Feature] 
   n    <- length(fts)
   
+  # posthoc tests
   mods.ph <- sapply( fts , function(f) {
     cat(f," ", which(fts == f), " from ", n , "features\n") #counter
     sapply(mods[Feature == f]$lmer_mods, function(m) {
@@ -13,7 +19,7 @@ posthoc.fun <- function( mod.out, contrast.file ) { #mod.output
     }, simplify = F )
   }, simplify = F, USE.NAMES = T )
   
-  #out
+  # out
   mod.out$posthoc <- mods.ph
   return(mod.out)
   

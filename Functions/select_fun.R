@@ -1,20 +1,22 @@
 # Select features
-select.fun <- function( posthoc.out, pars.file, contrast.file  ) { #posthoc.output
+select.fun <- function( posthoc.out, pars.file, contrast.file  ) {
   
-  # load parameter data
-  pars <-  read_xlsx(pars.file, col_names = T, sheet = "common" )
-  
-  # set params
-  alpha_select <- 0.05 #pars$value[12]
-  mods <- posthoc.out$posthoc
-  f    <- posthoc.out$models[p_lmer < 5e-3, Feature] #features[1:3]  #
+  # load data
+  pars <- read_xlsx(pars.file, col_names = T, sheet = "COMMON" )
   K    <- as.matrix(read.csv( contrast.file, header = TRUE, stringsAsFactors = FALSE, check.names = TRUE, row.names = 1) )
+  mods <- posthoc.out$posthoc
+  
+  # set feature selection params (alphas)
+  alpha_lmer   <- pars$value[11]
+  alpha_select <- pars$value[12]
+  
+  # get features that were selected for post-hoc analysis
+  f    <- posthoc.out$models[p_lmer < alpha_lmer, Feature]
   
   # extract pvals from posthoc results
   m_extr <- sapply(f, function(f) 
     sapply(mods[[f]], function(m1) unlist(m1, recursive = F),
            simplify = F, USE.NAMES = T) , simplify = F, USE.NAMES = T )
-  
   p_vals      <- data.frame(sapply(f, function(f) m_extr[[f]][[1]]$test.pvalues ))
   p_vals$grps <- rownames(K)
   p_vals      <- data.table(gather(p_vals,key = Feature, value = pvals, 1:length(f)))
@@ -31,6 +33,7 @@ select.fun <- function( posthoc.out, pars.file, contrast.file  ) { #posthoc.outp
   p_vals[  , C57_DBA :=  ifelse( sum( pvals[9:11] < alpha_select) >= 2, T,  F) , by = Feature]
   f_IS <- p_vals[C57_DBA == T, unique(Feature)]
   
+  # totoal amount of markers
   f_total <- unique(c(f_C57,f_DBA,f_IS))
   
   # out

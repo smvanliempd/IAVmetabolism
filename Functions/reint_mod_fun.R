@@ -3,7 +3,7 @@ reint.mod.fun <- function( stnd.out, pars.file, contrast.file ) {
   
   # data
   K <- as.matrix(read.csv( contrast.file, header = TRUE, stringsAsFactors = FALSE, check.names = TRUE, row.names = 1) )
-  pars <-  read_xlsx(pars.file, col_names = T, sheet = "common" )
+  pars <-  read_xlsx(pars.file, col_names = T, sheet = "COMMON" )
   dat <- stnd.out$data
   f_incl <- stnd.out$feature_data$reint_incl
   n <- length(f_incl)

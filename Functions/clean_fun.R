@@ -95,15 +95,5 @@ clean.fun  <- function( read.output, pars.file, polarity ) {
                                            filter_na    = feat.filter_na)
   
   return(read.output)
-  
-  
-  # return(list(data= read.output, 
-  #             feature_data = list(
-  #               deleted  = list(plot_noise   = plot,
-  #                               noise_filter = feat.filter_noise,
-  #                               filter_qc    = feat.filter_qc,
-  #                               filter_grp   = feat.filter_grp,
-  #                               filter_na    = feat.filter_na),
-  #               included = feat.included) )
-  # )
+ 
 }

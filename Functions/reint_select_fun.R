@@ -2,7 +2,7 @@
 reint.select.fun <- function( reint_ph.output, pars.file, contrast.file  ) {
   
   # load parameter data
-  pars <-  read_xlsx(pars.file, col_names = T, sheet = "common" )
+  pars <-  read_xlsx(pars.file, col_names = T, sheet = "COMMON" )
   alpha_select <- pars$value[14]
   
   # load data

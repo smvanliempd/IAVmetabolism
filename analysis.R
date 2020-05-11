@@ -21,8 +21,8 @@ dat.merge <- fill.fun( qccorr.output = dat.merge )
 dat.merge <- log.scale.fun(fill.out = dat.merge)
 
 # model, post-hoc tests, feature selection
-dat.mod <- mod.fun( stnd.out = dat.merge, pars.file = file.parm.all ); rm(dat.merge) ; gc()
-dat.mod <- posthoc.fun( mod.out = dat.mod, contrast.file = file.contrast )
+dat.mod <- mod.fun( stnd.out = dat.merge ); rm(dat.merge) ; gc()
+dat.mod <- posthoc.fun( mod.out = dat.mod, pars.file = file.parm.all, contrast.file = file.contrast )
 dat.mod <- select.fun( posthoc.out = dat.mod, pars.file = file.parm.all, contrast.file = file.contrast )
 
 # merge reintegrated data
@@ -36,8 +36,8 @@ dat.mod.reint <- reint.mod.fun(stnd.out = dat.reint,pars.file = file.parm.all, c
 dat.mod.reint <- reint.select.fun( reint_ph.output = dat.mod.reint, pars.file = file.parm.all, contrast.file = file.contrast )
 
 # correlation analysis
-dat.corr <- chem.cor.fun(dat.merge.out = dat.merge.out = dat.mod.reint)
-dat.corr <- metb.cor.fun(dat.corchem.out = dat.corchem.out = dat.corr)
+dat.corr <- chem.cor.fun(dat.merge.out = dat.mod.reint)
+dat.corr <- metb.cor.fun(dat.corchem.out = dat.corr)
 
 # Save the whole data thing to an .rds file
 saveRDS(dat.corr, file = paste0(getwd(),"/IVAmetabolism_data.rds"))
@@ -63,6 +63,7 @@ mod.samples <- stan_model( file = paste0(getwd(),"/Models/msg_20190904_001_cc.st
 # run models and extract samples
 dat.samples <- get.stan.samples(dat = dat.stan, mod = mod.samples)
 
-# bind sample data to identifications
+# Bind sample data to identifications
+# this function can also be used for updating identifications
 dat.samples.id <- id.bind.samples.fun(samples.out = dat.samples,meta.file = file.meta.all,id.file = file.feature )
 

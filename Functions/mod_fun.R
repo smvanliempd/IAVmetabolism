@@ -1,8 +1,9 @@
 # model features with linear mixed effects model
-mod.fun <- function( stnd.out, pars.file ) { #fill.output
+mod.fun <- function( stnd.out ) {
+  
+  # takes log/scaled output
   
   # data
-  pars <-  read_xlsx(pars.file, col_names = T, sheet = "common" )
   dat <- stnd.out$data
   fts <- stnd.out$features
   
@@ -24,14 +25,14 @@ mod.fun <- function( stnd.out, pars.file ) { #fill.output
   
   # get p vals
   cat("\nCalculate P values.\n")
-  alpha_lmer <- pars$value[11]
   mods[  , p_lmer := sapply(lmer_mods, function(m) Anova(m)["Pr(>Chisq)"] ), by = Feature ]
   
   # check if model is singular ( see ?isSingular() )
   mods[  , singular := sapply(lmer_mods, function(m) isSingular(m) ), by = Feature ]
   
   # out
-  stnd.out$models <- mods
+  stnd.out$models   <- mods
+  # stnd.out$parameters <- pars
   return(stnd.out)
   
 }

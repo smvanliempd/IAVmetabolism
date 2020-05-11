@@ -5,11 +5,14 @@ reint.adjust.fun <- function( reint.clean.output, pars.file) {
   dat          <- reint.clean.output$data
   f_reint      <- reint.clean.output$feature_data$reint_incl
   
-  # mfc adjustments
-  dat[ ,mfc_factor := unique(na.omit(mfc_factor)), by = File.Name] # fill all samples with mfc values
+  ## MFC adjustments
+  # Fill MFC values for reintegrations
+  dat[ ,mfc_factor := mean(mfc_factor, na.rm = T), by = File.Name] 
+  
+  # make MFC adjustment
   dat[Feature %in% f_reint , Area_reint_mfc := Area_reint/mfc_factor]
   
-  # QC adjustments
+  ## QC adjustments for reintegrations in positive and negative ionization
   for(plr in c("POS","NEG") ) {
     
     # read parameter file
@@ -18,10 +21,17 @@ reint.adjust.fun <- function( reint.clean.output, pars.file) {
     alpha_qccorr <- pars$value[9]
     pol.order    <- pars$value[13]
     
-    # data quality check and scaling
-    dat[Sample.Group == "QC" & Feature %in% f_reint & Polarity == plr, qc_corr_reint  := sum(!is.na(Area_reint_mfc) ) >= lim_qccorr , by = Feature ] # determine if there are enough QC samples
-    dat[Sample.Group == "QC" & !is.na(Area_reint_mfc) & Feature %in% f_reint & Polarity == plr, qc_ref_Area_reint := Area_reint_mfc[1] , by = Feature ]    # determine first non-NA QC signal -> reference value
-    dat[qc_corr_reint == T  & Feature %in% f_reint & Polarity == plr, sig_scld_reint := Area_reint_mfc/qc_ref_Area_reint  , by = Feature ]              # make scaled QC signals based on reference value
+    ## data quality check and scaling
+    # determine if there are enough QC samples
+    dat[Sample.Group == "QC" & Feature %in% f_reint & Polarity == plr, qc_corr_reint  := sum(!is.na(Area_reint_mfc) ) >= lim_qccorr , by = Feature ]
+    
+    # determine first non-NA QC signal -> reference value
+    dat[Sample.Group == "QC" & !is.na(Area_reint_mfc) & Feature %in% f_reint & Polarity == plr, qc_ref_Area_reint := Area_reint_mfc[1] , by = Feature ]   
+    
+    # make scaled QC signals based on reference value
+    dat[qc_corr_reint == T  & Feature %in% f_reint & Polarity == plr, sig_scld_reint := Area_reint_mfc/qc_ref_Area_reint  , by = Feature ]              
+    
+    # make qc models
     dat[Feature %in% f_reint & Polarity == plr, c("qc_corr_fact_reint","qc_corr_flag_reint") := {     
       
       #data
@@ -67,6 +77,7 @@ reint.adjust.fun <- function( reint.clean.output, pars.file) {
     # which reintegrated features were qc corrected?
     feat.qccorr <- unique(dat[qc_corr_flag_reint == T & Polarity == plr, Feature ])
     
+    # Collect QC corrected features 
     if (plr == "POS") {
       reint.clean.output$meta$pos$qc_corr_reint <- feat.qccorr 
     } else {
@@ -75,7 +86,7 @@ reint.adjust.fun <- function( reint.clean.output, pars.file) {
     
   }
   
-  # prepare output data
+  # out
   reint.clean.output$data <- dat
   return(reint.clean.output)
   
