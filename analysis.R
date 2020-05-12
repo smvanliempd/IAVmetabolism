@@ -66,3 +66,8 @@ dat.samples <- get.stan.samples(dat = dat.stan, mod = mod.samples)
 # this function can also be used for updating identifications
 dat.samples.id <- id.bind.samples.fun(samples.out = dat.samples,meta.file = file.meta.all,id.file = file.feature )
 
+# plotting
+source("plotting.R")
+
+
+
