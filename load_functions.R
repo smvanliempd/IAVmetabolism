@@ -11,6 +11,7 @@ library(multcomp)
 library(digest)
 library(xlsx)
 
+# analysis
 source(paste0(fun.loc,"read_fun.R"))
 source(paste0(fun.loc,"clean_fun.R"))
 source(paste0(fun.loc,"mfc_fun.R"))
@@ -32,4 +33,10 @@ source(paste0(fun.loc,"metb_cor_fun.R"))
 source(paste0(fun.loc,"id_bind_fun.R"))
 source(paste0(fun.loc,"get_stan_data.R"))
 source(paste0(fun.loc,"get_stan_samples.R"))
-source(paste0(fun.loc,"id_bind_samples_fun.R")) 
+source(paste0(fun.loc,"id_bind_samples_fun.R"))
+
+#plotting
+source(paste0(fun.plot.loc,"dot_plots_per_class.R"))
+source(paste0(fun.plot.loc,"dot_plots_per_class_ext.R"))
+source(paste0(fun.plot.loc,"plot_diff_strain_3dpi.R"))
+source(paste0(fun.plot.loc,"plot_heatmap.R"))

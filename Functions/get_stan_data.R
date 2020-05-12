@@ -14,7 +14,6 @@ get.stan.data <- function(id.data, chem.cor.out) {
                              Weight,
                              Area_reint_mfc_qc) ]
   
-  
   #  prepare data per metabolite
   dat.stan <- sapply(fts, function(f){
     
@@ -52,10 +51,13 @@ get.stan.data <- function(id.data, chem.cor.out) {
                Area      = d[ ,Area_reint_mfc_qc],
                Area_lcs  = d[ ,Area_lcs] )
     
-    # out
     return( dl )
+    
   },USE.NAMES = T,simplify = F)
   
-  return(dat.stan)
+  # out
+  dat.out <- list(dat_stan = dat.stan,
+                  dat_raw = dat)
+  return(dat.out)
   
 }

@@ -16,7 +16,10 @@ id.bind.samples.fun <- function(samples.out, id.file , meta.file) {
   d_del <- merge(dat, dm_del,  by.x = "variable", by.y = "delta.pars")
   d_grp <- merge(dat, dm_grp,  by.x = "variable", by.y = "group.pars")
   
-  dat.out <- list(deltas = d_del, groups = d_grp)
+  dat.out <- list(dat_deltas = d_del, 
+                  dat_groups = d_grp,
+                  dat_raw = samples.out$dat_raw,
+                  features = dm_fts[Use == T])
   
   return(dat.out)
   

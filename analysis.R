@@ -52,7 +52,6 @@ dat.id <- id.bind.fun(metb.cor.out = dat.corr, id.file = file.feature )
 library(rstan)
 options(mc.cores = parallel::detectCores())
 rstan_options(auto_write = TRUE)
-dat.stan <- get.stan.data(dat.id, dat.corr)
 
 # prepare data for stan models
 dat.stan <- get.stan.data(id.data = dat.id,chem.cor.out = dat.corr)

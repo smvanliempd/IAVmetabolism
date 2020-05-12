@@ -3,6 +3,9 @@ get.stan.samples <- function(dat ,mod , meta.file, id.file, n_chains = 4, get_de
   # function to transform log2 data in a %difference bounded by -100%
   log2delta <- function(d) {  100 * ( (2^d)  -  1 ) }
   
+  # get stan data format
+  ds <- dat$dat_stan
+  
   # seed for reproducibility
   seedy <- 20150613
   
@@ -11,8 +14,35 @@ get.stan.samples <- function(dat ,mod , meta.file, id.file, n_chains = 4, get_de
   n_warm <- 1500
   
   # features
-  fts <- names(dat)
+  fts <- names(ds)
   n_fts <- length(fts)
+  
+  # Samples to extract from the model
+  sample.pars <- c("del_c_3i_0i",
+                   "del_c_5i_0i",
+                   "del_c_8i_0i",
+                   "del_c_18i_0i",
+                   "del_c_30i_0i",
+                   "del_c_3i_3m",
+                   "del_c_5i_5m",
+                   "del_c_8i_8m",
+                   "del_c_18i_18m",
+                   "del_c_30i_30m",
+                   "del_d_3i_0i",
+                   "del_d_5i_0i",
+                   "del_d_3i_3m",
+                   "del_d_5i_5m",
+                   "del_d3m_c3m",
+                   "del_d5m_c5m",
+                   "del_d0i_c0i",
+                   "del_d3i_c3i",
+                   "del_d5i_c5i",
+                   "area_gr_hat" )
+  
+  # Samples to pool for inter-strain baseline differences
+  delta.bl.pars <- c("del_d3m_c3m",
+                     "del_d5m_c5m",
+                     "del_d0i_c0i")
   
   # quantiles for samples
   qtls <- c(0.05,0.25,0.50,0.75,0.95)
@@ -24,37 +54,10 @@ get.stan.samples <- function(dat ,mod , meta.file, id.file, n_chains = 4, get_de
     ptm <- proc.time()
     cat(f,"... ",which(fts == f)," of ",n_fts)
     
-    # Samples to extract from the model
-    sample.pars <- c("del_c_3i_0i",
-                     "del_c_5i_0i",
-                     "del_c_8i_0i",
-                     "del_c_18i_0i",
-                     "del_c_30i_0i",
-                     "del_c_3i_3m",
-                     "del_c_5i_5m",
-                     "del_c_8i_8m",
-                     "del_c_18i_18m",
-                     "del_c_30i_30m",
-                     "del_d_3i_0i",
-                     "del_d_5i_0i",
-                     "del_d_3i_3m",
-                     "del_d_5i_5m",
-                     "del_d3m_c3m",
-                     "del_d5m_c5m",
-                     "del_d0i_c0i",
-                     "del_d3i_c3i",
-                     "del_d5i_c5i",
-                     "area_gr_hat" )
-    
-    # Samples to pool for inter-strain baseline differences
-    delta.bl.pars <- c("del_d3m_c3m",
-                       "del_d5m_c5m",
-                       "del_d0i_c0i")
-    
     # extract delta-samples
     s <- sampling(object = mod,
                   pars =  sample.pars,
-                  data = dat[[f]],
+                  data = ds[[f]],
                   warmup = n_warm ,
                   iter = n_iter ,
                   chains= n_chains ,
@@ -96,7 +99,7 @@ get.stan.samples <- function(dat ,mod , meta.file, id.file, n_chains = 4, get_de
     # calulate quantiles for pooled baselines
     q_pl_bl <- quantile(s_bl, qtls)
     
-    # bin p and q
+    # bind p and q
     d <- rbind(q,p)
     
     # add the pooled baseline p and q values to the rest of the data
@@ -125,11 +128,15 @@ get.stan.samples <- function(dat ,mod , meta.file, id.file, n_chains = 4, get_de
     delta_bl_samples <- do.call(rbind, delta_bl_samples)
     
     return(list(s_quantiles=s_quantiles,
+                dat_raw = dat$dat_raw,
+                features = fts,
                 delta_bl_samples=delta_bl_samples))
     
   } else {
     
-    return(list(s_quantiles=s_quantiles)) 
+    return(list(s_quantiles=s_quantiles,
+                dat_raw = dat$dat_raw,
+                features = fts)) 
     
   }
 }
