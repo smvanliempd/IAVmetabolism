@@ -7,7 +7,7 @@ posthoc.fun <- function( mod.out, pars.file, contrast.file ) {
   K    <- as.matrix(read.csv( contrast.file, header = TRUE, stringsAsFactors = FALSE, check.names = TRUE, row.names = 1) )
   
   # select lmer mods for posthoc tests based on alpha_lmer
-  alpha_lmer <- pars$value[11]
+  alpha_lmer <- pars$value[1] #11
   fts    <- mod.out$models[p_lmer < alpha_lmer, Feature] 
   n    <- length(fts)
   

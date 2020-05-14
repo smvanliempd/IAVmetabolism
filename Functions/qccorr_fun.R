@@ -17,7 +17,7 @@ qccorr.fun <- function( mfc.output, pars.file, polarity ) {
   dat          <- mfc.output$data
   lim_qccorr   <- pars$value[8]
   alpha_qccorr <- pars$value[9]
-  pol.order    <- pars$value[13]
+  pol.order    <- pars$value[10]
   
   # Data quality check and transformations
   dat[Sample.Group == "QC" , qc_corr  := sum(!is.na(Signal_mfc) ) >= lim_qccorr , by = Feature ] # determine if there are enough QC samples

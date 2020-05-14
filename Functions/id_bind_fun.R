@@ -12,6 +12,8 @@ id.bind.fun <- function( metb.cor.out, id.file ) {
   f_rep    <- dat[ reintegrated == T , .(rep_feature = rep_feature[1], 
                                          RT = RT_reint[1], 
                                          mz = mz_reint[1]) , by = Feature ]
+  
+  # flag markers
   f_rep[Feature %in% f_C57 , marker_C57 := T]
   f_rep[Feature %in% f_DBA , marker_DBA := T]
   f_rep[Feature %in% f_IS  , marker_IS  := T]

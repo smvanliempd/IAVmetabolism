@@ -19,7 +19,7 @@ reint.adjust.fun <- function( reint.clean.output, pars.file) {
     pars <-  read_xlsx(pars.file, col_names = T, sheet = plr )
     lim_qccorr   <- pars$value[8]
     alpha_qccorr <- pars$value[9]
-    pol.order    <- pars$value[13]
+    pol.order    <- pars$value[10]
     
     ## data quality check and scaling
     # determine if there are enough QC samples
