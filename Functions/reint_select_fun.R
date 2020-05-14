@@ -3,7 +3,7 @@ reint.select.fun <- function( reint_ph.output, pars.file, contrast.file  ) {
   
   # load parameter data
   pars <-  read_xlsx(pars.file, col_names = T, sheet = "COMMON" )
-  alpha_select <- pars$value[3] #14
+  alpha_select <- pars$value[3]
   
   # load data
   mods <- reint_ph.output$posthoc

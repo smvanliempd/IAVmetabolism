@@ -31,8 +31,7 @@ mod.fun <- function( stnd.out ) {
   mods[  , singular := sapply(lmer_mods, function(m) isSingular(m) ), by = Feature ]
   
   # out
-  stnd.out$models   <- mods
-  # stnd.out$parameters <- pars
+  stnd.out$models <- mods
   return(stnd.out)
   
 }

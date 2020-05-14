@@ -7,11 +7,10 @@ select.fun <- function( posthoc.out, pars.file, contrast.file  ) {
   mods <- posthoc.out$posthoc
   
   # set feature selection params (alphas)
-  # alpha_lmer   <- pars$value[11]
-  alpha_select <- pars$value[2] #12
+  alpha_select <- pars$value[2]
   
   # get features that were selected for post-hoc analysis
-  fts    <- names(dat.mod$posthoc) #posthoc.out$models[p_lmer < alpha_lmer, Feature]
+  fts <- names(dat.mod$posthoc)
   
   # extract pvals from posthoc results
   m_extr <- sapply(fts, function(f) 
@@ -42,18 +41,6 @@ select.fun <- function( posthoc.out, pars.file, contrast.file  ) {
                                  select_DBA = f_DBA,
                                  select_InterSpecies = f_IS,
                                  select_total = f_total)
-
-  
-  # out <- list( data = posthoc.out$data,
-  #              features = posthoc.out$features,
-  #              models = posthoc.out$models,
-  #              posthoc = posthoc.out$posthoc,
-  #              meta = posthoc.out$meta,
-  #              selections = list( pvals = p_vals,
-  #                                 select_C57 = f_C57,
-  #                                 select_DBA = f_DBA,
-  #                                 select_InterSpecies = f_IS,
-  #                                 select_total = f_total))
   
   return(posthoc.out)
   
