@@ -79,7 +79,7 @@ get.stan.samples <- function(dat ,mod , meta.file, id.file, n_chains = 4, get_de
     s_pl_bl$Feature <- f
     
     # calculate del_del_cd_3i0i, i.e. the difference in percent-change between strains
-    #  these are *no* log2 values!!!
+    #  unlike the other samples, these are *not* log2 values!!!
     del_del_str_inf <-  c(log2delta(s[,"del_d_3i_0i"])) -  log2delta(c(s[,"del_c_3i_0i"]))
     s <- cbind(s, del_del_str_inf)
     
