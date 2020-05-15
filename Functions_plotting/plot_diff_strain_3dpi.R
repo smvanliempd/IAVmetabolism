@@ -34,6 +34,7 @@ plot.diff.strain.3dpi <- function(dat_plot, set, class_order, dvc = "png", scale
   dat[ , p_col := ifelse(sign(q50_C57) == sign(q50_DBA), "black", "red") ]
   
   # plot ellipses and dots
+  lfc2perc <- function(a) { 100*( ( 2^a ) - 1 ) } 
   p <- ggplot(dat, aes(x = q50_C57, y = q50_DBA) ) +
     geom_ellipse(aes(x0 = q50_C57, y0 = q50_DBA, a = diam_C57, b = diam_DBA, angle = 0 ),fill = "black", alpha = 0.05, col = NA) +
     geom_hline(yintercept = 0, size = 0.25) +
@@ -44,10 +45,10 @@ plot.diff.strain.3dpi <- function(dat_plot, set, class_order, dvc = "png", scale
     geom_point(aes(col = p_col),size = 2, show.legend = F ) +
     geom_smooth(method = "lm", col= "red", size = 0.5, se = F)+
     scale_color_manual(values = c("black","red")) +
-    scale_y_continuous(breaks = -10:10)+
-    scale_x_continuous(breaks = -10:10)+
-    labs( x = expression(paste(log[2], "(FC) in C57 at 3 dpi")),
-          y =expression(paste( log[2], "(FC) in DBA at 3 dpi") ))+
+    scale_y_continuous(breaks = -10:10,labels = lfc2perc)+
+    scale_x_continuous(breaks = -10:10,labels = lfc2perc)+
+    labs( y = expression(paste(Delta,"% (50 PI)") ),
+          x = expression(paste(Delta,"% (50 PI)") ) ) +
     facet_wrap(Class ~ ., nrow = 1 ) +
     coord_fixed() +
     theme_bw() +
