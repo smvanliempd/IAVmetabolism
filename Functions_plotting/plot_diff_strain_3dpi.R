@@ -47,8 +47,8 @@ plot.diff.strain.3dpi <- function(dat_plot, set, class_order, dvc = "png", scale
     scale_color_manual(values = c("black","red")) +
     scale_y_continuous(breaks = -10:10,labels = lfc2perc)+
     scale_x_continuous(breaks = -10:10,labels = lfc2perc)+
-    labs( y = expression(paste(Delta,"% (50 PI)") ),
-          x = expression(paste(Delta,"% (50 PI)") ) ) +
+    labs(x = expression(paste(Delta,"% B6 (50 PI)") ),
+         y = expression(paste(Delta,"% D2 (50 PI)") ) ) +
     facet_wrap(Class ~ ., nrow = 1 ) +
     coord_fixed() +
     theme_bw() +
