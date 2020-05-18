@@ -44,7 +44,7 @@ dot.plots.per.class.ext <-  function(dat_plot, set,  p_effect = 0.8, sel_effect 
     dat.cls[ ,Final_ID := factor(Final_ID, met.levels)]
     
     # highlight effects with reliabale effect directions excluding "del_pl_bl"
-    dat.cls[ , flag_direction := ifelse((P_pos <= p_effect | P_pos >= 1 - p_effect), "x", "o")] #variable %in% vars.fc[1] &
+    dat.cls[ , flag_direction := ifelse((P_pos <= p_effect & P_pos >= 1 - p_effect), "o", "x")]
     fts <- droplevels(dat.cls[flag_direction == "x", Final_ID])
     
     # prepare plot data and parameters

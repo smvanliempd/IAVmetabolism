@@ -50,7 +50,7 @@ dot.plots.per.class <-  function(dat_plot, set,  p_effect = 0.8, plot_what = "He
     # }
     
     # highlight effects with reliabale effect directions excluding "del_pl_bl"
-    dat.cls[ , flag_direction := ifelse((P_pos <= p_effect | P_pos >= 1 - p_effect), "x", "o")]
+    dat.cls[ , flag_direction := ifelse((P_pos <= p_effect & P_pos >= 1 - p_effect), "o", "x")]
     
     # prepare plot data and parameters
     dw <- .5
