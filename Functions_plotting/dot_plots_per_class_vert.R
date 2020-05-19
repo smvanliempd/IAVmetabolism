@@ -79,7 +79,7 @@ dot.plots.per.class.vert <-  function(dat_plot, set,  p_effect = 0.8, plot_what 
             axis.title.y = element_blank(), 
             panel.grid.minor = element_blank(),
             legend.position = "bottom",
-            text = element_text(size = 14))
+            text = element_text(size = 16))
     
     # different facets for plot types
     if(plot_what == "Both") {
@@ -89,14 +89,14 @@ dot.plots.per.class.vert <-  function(dat_plot, set,  p_effect = 0.8, plot_what 
     }
     
     # set fixed panel sizes
-    size_y_slots <- 0.18 # 0.15
+    size_y_slots <- 0.20 # 0.15
     p1 <- set_panel_size(p1, height = unit(size_y_slots * n_mets, "in"), width = unit(1.5, "in") )
     
     # safe plot
     cls.name <-  str_replace(make.names(cls), "\\.", "_")
     ggsave2(paste0(getwd(),"/Plots/Dot_plots/",plot_what,"/dots_per_class_",set,"_",cls.name,"_vert.", dvc), p1,
             height  = size_y_slots * n_mets + 5,
-            width = 8,
+            width = 9,
             units  = "in", dpi = 600,device = dvc)
     
     
