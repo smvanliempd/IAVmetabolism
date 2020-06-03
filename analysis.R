@@ -1,5 +1,6 @@
 # cleaning, adjustment and modellinng of auto-integrated and manually integrated LCMS data
 # ptm <- proc.time()
+
 source("paths.R")
 source("load_functions.R")
 
@@ -46,7 +47,7 @@ saveRDS(dat.corr, file = paste0(getwd(),"/IVAmetabolism_data.rds"))
 dat.id <- id.bind.fun(metb.cor.out = dat.corr, id.file = file.feature )
 
 # 32.5 minutes on i7-9700K/3.60GHz/32Gb RAM
-# proc.time() - ptm
+
 
 # Bayesian multi-level models pre feature
 library(rstan)
@@ -69,5 +70,5 @@ dat.samples.id <- id.bind.samples.fun(samples.out = dat.samples,meta.file = file
 # plotting
 source("plotting.R")
 
-
-
+# proc.time() - ptm # total analysis time is about 46 minutes on i7-9700K CPU @ 3.60GHz/32Gb RAM
+# writeLines(capture.output(sessionInfo()), "sessionInfo.txt")
