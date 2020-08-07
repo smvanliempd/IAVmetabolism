@@ -10,3 +10,4 @@ plotting.R
 tables.R
 IVAmetabolism_data.rds
 **.rds
+analysis_RNAseq.R
