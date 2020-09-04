@@ -73,7 +73,7 @@ plot.heatmap <- function(dat_plot, set, class_order ,cut_low, cut_high, plot_mag
                          low = "blue", mid = "white", high = "red",
                          limits = c(cut_low, cut_high),
                          guide=guide_colorbar(raster=F,nbin = 17) )+
-    labs(y = "Days post-infection") +
+    labs(y = "Time (dpi)") + #"Days post-infection"
     facet_grid(Facet_vert ~ Class , scales = "free", space = "free") +
     theme_bw() +
     theme(axis.title.x = element_blank(),
